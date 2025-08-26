@@ -1,0 +1,65 @@
+[package]
+name = "arbitrage-spy"
+version = "0.1.0"
+edition = "2021"
+authors = ["Your Name <your.email@example.com>"]
+description = "A blockchain arbitrage opportunity monitoring system for multiple DEX platforms"
+license = "MIT"
+repository = "https://github.com/yourusername/arbitrage-spy"
+keywords = ["blockchain", "arbitrage", "dex", "defi", "monitoring"]
+categories = ["cryptocurrency", "finance"]
+
+[dependencies]
+# HTTP client for API requests
+reqwest = { version = "0.11", features = ["json"] }
+# Async runtime
+tokio = { version = "1.0", features = ["full"] }
+# JSON serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+# Ethereum and Web3 support
+web3 = "0.19"
+ethers = "2.0"
+# Error handling
+anyhow = "1.0"
+thiserror = "1.0"
+# Logging
+log = "0.4"
+env_logger = "0.10"
+# Configuration
+config = "0.13"
+# BigDecimal for precise calculations
+bigdecimal = { version = "0.4", features = ["serde"] }
+# Time handling
+chrono = { version = "0.4", features = ["serde"] }
+# Futures utilities
+futures = "0.3"
+# URL parsing
+url = "2.4"
+# Random number generation
+rand = "0.8"
+# BigDecimal zero trait
+num-traits = "0.2"
+# Async trait support
+async-trait = "0.1"
+# Environment variables from .env file
+dotenv = "0.15"
+# Table formatting for terminal output
+tabled = "0.15"
+
+[dev-dependencies]
+tokio-test = "0.4"
+
+[[bin]]
+name = "arbitrage-spy"
+path = "src/main.rs"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+panic = "abort"
+
+[profile.dev]
+opt-level = 0
+debug = true
