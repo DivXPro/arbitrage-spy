@@ -1,0 +1,691 @@
+{
+  "tokens": [
+    {
+      "id": "aave",
+      "symbol": "aave",
+      "name": "Aave",
+      "platforms": {
+        "polygon-pos": "0xd6df932a45c0f255f85145f286ea0b292b21c90b",
+        "harmony-shard-0": "0xcf323aad9e522b93f11c352caa519ad0e14eb40f",
+        "fantom": "0x6a07a792ab2965c72a5b8088d3a069a7ac3a993b",
+        "sora": "0x0091bd8d8295b25cab5a7b8b0e44498e678cfc15d872ede3215f7d4c7635ba36",
+        "ethereum": "0x7fc66500c84a76ad7e9c93437bfc5ac33e2ddae9",
+        "avalanche": "0x63a72806098bd3d9520cc43356dd78afe5d386d9",
+        "huobi-token": "0x202b4936fe1a82a4965220860ae46d7d3939bb25",
+        "hydration": "asset_registry%2F1000624",
+        "optimistic-ethereum": "0x76fb31fb4af56892a25e32cfc43de717950c9278",
+        "arbitrum-one": "0xba5ddd1f9d7f570dc94a51479a000e3bce967196",
+        "near-protocol": "7fc66500c84a76ad7e9c93437bfc5ac33e2ddae9.factory.bridge.near",
+        "energi": "0xa7f2f790355e0c32cab03f92f6eb7f488e6f049a",
+        "base": "0x63706e401c06ac8513145b7687a14804d17f814b",
+        "binance-smart-chain": "0xfb6115445bff7b52feb98650c87f44907e58f802"
+      },
+      "market_cap_rank": 38,
+      "current_price": 329.64,
+      "market_cap": 5008731222.0,
+      "total_volume": 746894940.0,
+      "price_change_percentage_24h": 0.08342
+    },
+    {
+      "id": "1inch",
+      "symbol": "1inch",
+      "name": "1inch",
+      "platforms": {
+        "binance-smart-chain": "0x111111111117dc0aa78b770fa6a738034120c302",
+        "near-protocol": "111111111117dc0aa78b770fa6a738034120c302.factory.bridge.near",
+        "polygon-pos": "0x9c2c5fd7b07e95ee044ddeba0e97a665f142394f",
+        "harmony-shard-0": "0x58f1b044d8308812881a1433d9bbeff99975e70c",
+        "avalanche": "0xd501281565bf7789224523144fe5d98e8b28f267",
+        "ethereum": "0x111111111117dc0aa78b770fa6a738034120c302",
+        "energi": "0xdda6205dc3f47e5280eb726613b27374eee9d130"
+      },
+      "market_cap_rank": 237,
+      "current_price": 0.242557,
+      "market_cap": 338607558.0,
+      "total_volume": 24535809.0,
+      "price_change_percentage_24h": -3.20374
+    },
+    {
+      "id": "0x",
+      "symbol": "zrx",
+      "name": "0x Protocol",
+      "platforms": {
+        "avalanche": "0x596fa47043f99a4e0f122243b841e55375cde0d2",
+        "energi": "0x591c19dc0821704bedaa5bbc6a66fee277d9437e",
+        "ethereum": "0xe41d2489571d322189246dafa5ebde1f4699f498",
+        "harmony-shard-0": "0x8143e2a1085939caa9cef6665c2ff32f7bc08435"
+      },
+      "market_cap_rank": 326,
+      "current_price": 0.237912,
+      "market_cap": 201769137.0,
+      "total_volume": 21332667.0,
+      "price_change_percentage_24h": -3.05335
+    },
+    {
+      "id": "0x0-ai-ai-smart-contract",
+      "symbol": "0x0",
+      "name": "0x0.ai: AI Smart Contract",
+      "platforms": {
+        "ethereum": "0x5a3e6a77ba2f983ec0d371ea3b475f8bc0811ad5"
+      },
+      "market_cap_rank": 909,
+      "current_price": 0.04531146,
+      "market_cap": 40145717.0,
+      "total_volume": 357336.0,
+      "price_change_percentage_24h": -4.06434
+    },
+    {
+      "id": "69420",
+      "symbol": "69420",
+      "name": "69420",
+      "platforms": {
+        "ethereum": "0x69cbaf6c147086c3c234385556f8a0c6488d3420"
+      },
+      "market_cap_rank": 1557,
+      "current_price": 0.00022008,
+      "market_cap": 13755450.0,
+      "total_volume": 0.0,
+      "price_change_percentage_24h": 0.0
+    },
+    {
+      "id": "4chan",
+      "symbol": "4chan",
+      "name": "4Chan",
+      "platforms": {
+        "ethereum": "0xe0a458bf4acf353cb45e211281a334bb1d837885"
+      },
+      "market_cap_rank": 1938,
+      "current_price": 1.06003e-13,
+      "market_cap": 8164639.0,
+      "total_volume": 46279.0,
+      "price_change_percentage_24h": -8.04532
+    },
+    {
+      "id": "0xgasless-2",
+      "symbol": "0xgas",
+      "name": "0xGasless",
+      "platforms": {
+        "ethereum": "0x5fc111f3fa4c6b32eaf65659cfebdeed57234069"
+      },
+      "market_cap_rank": 2226,
+      "current_price": 0.515002,
+      "market_cap": 5665019.0,
+      "total_volume": 9404.65,
+      "price_change_percentage_24h": -1.58564
+    },
+    {
+      "id": "4everland",
+      "symbol": "4ever",
+      "name": "4EVERLAND",
+      "platforms": {
+        "ethereum": "0xe355de6a6043b0580ff5a26b46051a4809b12793",
+        "binance-smart-chain": "0x63ec886286f30ad392749b9e8f24f67f5b8ac394"
+      },
+      "market_cap_rank": 2398,
+      "current_price": 0.00252722,
+      "market_cap": 4562538.0,
+      "total_volume": 349859.0,
+      "price_change_percentage_24h": -9.12033
+    },
+    {
+      "id": "99-bitcoins",
+      "symbol": "99btc",
+      "name": "99 Bitcoins",
+      "platforms": {
+        "ethereum": "0xc2eb40516ecaac04ae9964934983d1e9ebdf51fd"
+      },
+      "market_cap_rank": 3798,
+      "current_price": 0.00001907,
+      "market_cap": 1260105.0,
+      "total_volume": 2493.56,
+      "price_change_percentage_24h": -5.05413
+    },
+    {
+      "id": "5ire",
+      "symbol": "5ire",
+      "name": "5ire",
+      "platforms": {
+        "ethereum": "0x3bd7d4f524d09f4e331577247a048d56e4b67a7f"
+      },
+      "market_cap_rank": 5084,
+      "current_price": 0.00076511,
+      "market_cap": 490912.0,
+      "total_volume": 197306.0,
+      "price_change_percentage_24h": -0.08049
+    },
+    {
+      "id": "aag-ventures",
+      "symbol": "aag",
+      "name": "AAG",
+      "platforms": {
+        "harmony-shard-0": "0xae0609a062a4eaed49de28c5f6a193261e0150ea",
+        "ethereum": "0x5ba19d656b65f1684cfea4af428c23b9f3628f97"
+      },
+      "market_cap_rank": 5119,
+      "current_price": 0.00073574,
+      "market_cap": 477161.0,
+      "total_volume": 6.24,
+      "price_change_percentage_24h": null
+    },
+    {
+      "id": "aarna-atv111",
+      "symbol": "atv111",
+      "name": "aarna atv111",
+      "platforms": {
+        "ethereum": "0x72ec8447074dc0bfbedfb516cc250b525f3a4aba"
+      },
+      "market_cap_rank": 5149,
+      "current_price": 101.7,
+      "market_cap": 465691.0,
+      "total_volume": 0.0,
+      "price_change_percentage_24h": 0.01583
+    },
+    {
+      "id": "aarna-atv-usdc-ethereum",
+      "symbol": "atvusdc",
+      "name": "aarna atv USDC (Ethereum)",
+      "platforms": {
+        "ethereum": "0xf30f62963cce132f32306d7f18a8587958b30ea9"
+      },
+      "market_cap_rank": 5466,
+      "current_price": 101.7,
+      "market_cap": 368223.0,
+      "total_volume": 0.0,
+      "price_change_percentage_24h": 0.01583
+    },
+    {
+      "id": "88mph",
+      "symbol": "mph",
+      "name": "88mph",
+      "platforms": {
+        "ethereum": "0x8888801af4d980682e47f1a9036e589479e835c5"
+      },
+      "market_cap_rank": 5479,
+      "current_price": 0.278165,
+      "market_cap": 363898.0,
+      "total_volume": 85.05,
+      "price_change_percentage_24h": -5.13085
+    },
+    {
+      "id": "3space-art",
+      "symbol": "pace",
+      "name": "3SPACE ART",
+      "platforms": {
+        "ethereum": "0x8bc2bcb1b1896291942c36f3cca3c1afa0aaa7fd"
+      },
+      "market_cap_rank": 5558,
+      "current_price": 0.00520004,
+      "market_cap": 343330.0,
+      "total_volume": 21539.0,
+      "price_change_percentage_24h": -2.39386
+    },
+    {
+      "id": "0chain",
+      "symbol": "zcn",
+      "name": "Zus",
+      "platforms": {
+        "polygon-pos": "0x8bb30e0e67b11b978a5040144c410e1ccddcba30",
+        "ethereum": "0xb9ef770b6a5e12e45983c5d80545258aa38f3b78"
+      },
+      "market_cap_rank": 5848,
+      "current_price": 0.00580679,
+      "market_cap": 281055.0,
+      "total_volume": 167.83,
+      "price_change_percentage_24h": 1.07311
+    },
+    {
+      "id": "0xshadow",
+      "symbol": "0xs",
+      "name": "0xShadow",
+      "platforms": {
+        "ethereum": "0x6748cde4ebabdba761e67172415d72b499d1d75b"
+      },
+      "market_cap_rank": 5897,
+      "current_price": 0.00271048,
+      "market_cap": 271375.0,
+      "total_volume": 5476.04,
+      "price_change_percentage_24h": -11.79842
+    },
+    {
+      "id": "aarna-afi-802v2",
+      "symbol": "afi 802v2",
+      "name": "aarna afi 802v2",
+      "platforms": {
+        "ethereum": "0xb68e430c56ed9e548e864a68a60f9d41f993b32c"
+      },
+      "market_cap_rank": 6529,
+      "current_price": 71.04,
+      "market_cap": 176499.0,
+      "total_volume": 0.0,
+      "price_change_percentage_24h": -2.55027
+    },
+    {
+      "id": "1art",
+      "symbol": "1art",
+      "name": "OneArt",
+      "platforms": {
+        "ethereum": "0xd3c325848d7c6e29b574cb0789998b2ff901f17e",
+        "fantom": "0xd3c325848d7c6e29b574cb0789998b2ff901f17e",
+        "binance-smart-chain": "0xd3c325848d7c6e29b574cb0789998b2ff901f17e"
+      },
+      "market_cap_rank": 7024,
+      "current_price": 0.00039841,
+      "market_cap": 125445.0,
+      "total_volume": 17.18,
+      "price_change_percentage_24h": -1.38071
+    },
+    {
+      "id": "0xgen",
+      "symbol": "xgn",
+      "name": "0xGen",
+      "platforms": {
+        "ethereum": "0x683c8e87e74f3f8f27c0d2ebd4350fe4dba814ef"
+      },
+      "market_cap_rank": 7078,
+      "current_price": 0.00028522,
+      "market_cap": 121524.0,
+      "total_volume": 26387.0,
+      "price_change_percentage_24h": 1.66698
+    },
+    {
+      "id": "8pay",
+      "symbol": "8pay",
+      "name": "8Pay",
+      "platforms": {
+        "binance-smart-chain": "0x6eadc05928acd93efb3fa0dfbc644d96c6aa1df8",
+        "polygon-pos": "0x06ddb3a8bc0abc14f85e974cf1a93a6f8d4909d9",
+        "ethereum": "0x06ddb3a8bc0abc14f85e974cf1a93a6f8d4909d9"
+      },
+      "market_cap_rank": 7126,
+      "current_price": 0.00180877,
+      "market_cap": 117078.0,
+      "total_volume": 108.94,
+      "price_change_percentage_24h": null
+    },
+    {
+      "id": "-3",
+      "symbol": "meow",
+      "name": "Meow Meow Coin",
+      "platforms": {
+        "ethereum": "0x77be1ba1cd2d7a63bffc772d361168cc327dd8bc"
+      },
+      "market_cap_rank": 7233,
+      "current_price": 2.57325e-7,
+      "market_cap": 108254.0,
+      "total_volume": 22.87,
+      "price_change_percentage_24h": -2.86514
+    },
+    {
+      "id": "aarna-atv-808",
+      "symbol": "atv808",
+      "name": "aarna atv 808",
+      "platforms": {
+        "ethereum": "0x60697825812ecc1fff07f41e2d3f5cf314674fa6"
+      },
+      "market_cap_rank": 7355,
+      "current_price": 160.96,
+      "market_cap": 99804.0,
+      "total_volume": 0.0,
+      "price_change_percentage_24h": -3.12196
+    },
+    {
+      "id": "0-knowledge-network",
+      "symbol": "0kn",
+      "name": "0 Knowledge Network",
+      "platforms": {
+        "ethereum": "0x4594cffbfc09bc5e7ecf1c2e1c1e24f0f7d29036"
+      },
+      "market_cap_rank": 8190,
+      "current_price": 7.35e-6,
+      "market_cap": 58694.0,
+      "total_volume": 42.95,
+      "price_change_percentage_24h": -5.21685
+    },
+    {
+      "id": "-9",
+      "symbol": "∑",
+      "name": "∑",
+      "platforms": {
+        "ethereum": "0xb772c8745c46c8868610dcecdcefc803cfdf28f5"
+      },
+      "market_cap_rank": 8554,
+      "current_price": 0.00037526,
+      "market_cap": 45300.0,
+      "total_volume": 36.77,
+      "price_change_percentage_24h": -5.23714
+    },
+    {
+      "id": "47th-potus",
+      "symbol": "trump47",
+      "name": "47th POTUS",
+      "platforms": {
+        "ethereum": "0x535887989b9edffb63b1fd5c6b99a4d45443b49a"
+      },
+      "market_cap_rank": 8880,
+      "current_price": 0.00003677,
+      "market_cap": 36771.0,
+      "total_volume": 41.14,
+      "price_change_percentage_24h": 0.998
+    },
+    {
+      "id": "0xprivacy",
+      "symbol": "0xp",
+      "name": "0xPrivacy",
+      "platforms": {
+        "ethereum": "0x46b7cb31a4a6375c69a6d0b9ed9261fb649adb83"
+      },
+      "market_cap_rank": 10214,
+      "current_price": 0.00013131,
+      "market_cap": 15757.0,
+      "total_volume": 49.53,
+      "price_change_percentage_24h": null
+    },
+    {
+      "id": "1984-token",
+      "symbol": "1984",
+      "name": "1984",
+      "platforms": {
+        "ethereum": "0x4278a8944cf63753b13e9f726bbc1192412988d8"
+      },
+      "market_cap_rank": 10254,
+      "current_price": 0.00001791,
+      "market_cap": 15273.77,
+      "total_volume": 57.73,
+      "price_change_percentage_24h": -3.87993
+    },
+    {
+      "id": "0dog",
+      "symbol": "0dog",
+      "name": "Bitcoin Dogs",
+      "platforms": {
+        "ethereum": "0xaa6624d7363ef8284aa8ce4e18146ded5f421b2c"
+      },
+      "market_cap_rank": null,
+      "current_price": 0.00001716,
+      "market_cap": 0.0,
+      "total_volume": 759.94,
+      "price_change_percentage_24h": null
+    },
+    {
+      "id": "1million-nfts",
+      "symbol": "1mil",
+      "name": "1MillionNFTs",
+      "platforms": {
+        "near-protocol": "a4ef4b0b23c1fc81d3f9ecf93510e64f58a4a016.factory.bridge.near",
+        "ethereum": "0xa4ef4b0b23c1fc81d3f9ecf93510e64f58a4a016"
+      },
+      "market_cap_rank": null,
+      "current_price": 0.03181721,
+      "market_cap": 0.0,
+      "total_volume": 98.21,
+      "price_change_percentage_24h": -0.98129
+    },
+    {
+      "id": "3a-lending-protocol",
+      "symbol": "a3a",
+      "name": "3A",
+      "platforms": {
+        "polygon-pos": "0x58c7b2828e7f2b2caa0cc7feef242fa3196d03df",
+        "ethereum": "0x3f817b28da4940f018c6b5c0a11c555ebb1264f9",
+        "linea": "0x3d4b2132ed4ea0aa93903713a4de9f98e625a5c7"
+      },
+      "market_cap_rank": null,
+      "current_price": 0.0001662,
+      "market_cap": 0.0,
+      "total_volume": 8.68,
+      "price_change_percentage_24h": 0.95953
+    },
+    {
+      "id": "a7a5",
+      "symbol": "a7a5",
+      "name": "A7A5",
+      "platforms": {
+        "tron": "TLeVfrdym8RoJreJ23dAGyfJDygRtiWKBZ",
+        "ethereum": "0x6fa0be17e4bea2fcfa22ef89bf8ac9aab0ab0fc9"
+      },
+      "market_cap_rank": null,
+      "current_price": 0.00001048,
+      "market_cap": 0.0,
+      "total_volume": 0.0,
+      "price_change_percentage_24h": 0.0
+    },
+    {
+      "id": "aave-aave",
+      "symbol": "aaave",
+      "name": "Aave AAVE",
+      "platforms": {
+        "ethereum": "0xffc97d72e13e01096502cb8eb52dee56f74dad7b"
+      },
+      "market_cap_rank": null,
+      "current_price": 330.23,
+      "market_cap": 0.0,
+      "total_volume": 81333.0,
+      "price_change_percentage_24h": -1.29256
+    },
+    {
+      "id": "aave-amm-bptbalweth",
+      "symbol": "aammbptbalweth",
+      "name": "Aave AMM BptBALWETH",
+      "platforms": {
+        "ethereum": "0xd109b2a304587569c84308c55465cd9ff0317bfb"
+      },
+      "market_cap_rank": null,
+      "current_price": 86.9,
+      "market_cap": 0.0,
+      "total_volume": 0.0,
+      "price_change_percentage_24h": -2.98586
+    },
+    {
+      "id": "aave-amm-bptwbtcweth",
+      "symbol": "aammbptwbtcweth",
+      "name": "Aave AMM BptWBTCWETH",
+      "platforms": {
+        "ethereum": "0x358bd0d980e031e23eba9aa793926857703783bd"
+      },
+      "market_cap_rank": null,
+      "current_price": 351973.0,
+      "market_cap": 0.0,
+      "total_volume": 0.0,
+      "price_change_percentage_24h": -1.46305
+    },
+    {
+      "id": "aave-amm-dai",
+      "symbol": "aammdai",
+      "name": "Aave AMM DAI",
+      "platforms": {
+        "ethereum": "0x79be75ffc64dd58e66787e4eae470c8a1fd08ba4"
+      },
+      "market_cap_rank": null,
+      "current_price": 0.999417,
+      "market_cap": 0.0,
+      "total_volume": 0.0,
+      "price_change_percentage_24h": -0.17506
+    },
+    {
+      "id": "aave-amm-uniaaveweth",
+      "symbol": "aammuniaaveweth",
+      "name": "Aave AMM UniAAVEWETH",
+      "platforms": {
+        "ethereum": "0xe59d2ff6995a926a574390824a657eed36801e55"
+      },
+      "market_cap_rank": null,
+      "current_price": 3801.39,
+      "market_cap": 0.0,
+      "total_volume": 0.0,
+      "price_change_percentage_24h": -2.32914
+    },
+    {
+      "id": "aave-amm-unibatweth",
+      "symbol": "aammunibatweth",
+      "name": "Aave AMM UniBATWETH",
+      "platforms": {
+        "ethereum": "0xa1b0edf4460cc4d8bfaa18ed871bff15e5b57eb4"
+      },
+      "market_cap_rank": null,
+      "current_price": 78.97,
+      "market_cap": 0.0,
+      "total_volume": 0.0,
+      "price_change_percentage_24h": -3.40311
+    },
+    {
+      "id": "aave-amm-unicrvweth",
+      "symbol": "aammunicrvweth",
+      "name": "Aave AMM UniCRVWETH",
+      "platforms": {
+        "ethereum": "0x0ea20e7ffb006d4cfe84df2f72d8c7bd89247db0"
+      },
+      "market_cap_rank": null,
+      "current_price": 1443.1,
+      "market_cap": 0.0,
+      "total_volume": 0.0,
+      "price_change_percentage_24h": -5.28801
+    },
+    {
+      "id": "aave-amm-unidaiusdc",
+      "symbol": "aammunidaiusdc",
+      "name": "Aave AMM UniDAIUSDC",
+      "platforms": {
+        "ethereum": "0xe340b25fe32b1011616bb8ec495a4d503e322177"
+      },
+      "market_cap_rank": null,
+      "current_price": 2263780.0,
+      "market_cap": 0.0,
+      "total_volume": 0.0,
+      "price_change_percentage_24h": -0.16611
+    },
+    {
+      "id": "aave-amm-unidaiweth",
+      "symbol": "aammunidaiweth",
+      "name": "Aave AMM UniDAIWETH",
+      "platforms": {
+        "ethereum": "0x9303eabc860a743aabcc3a1629014cabcc3f8d36"
+      },
+      "market_cap_rank": null,
+      "current_price": 279.43,
+      "market_cap": 0.0,
+      "total_volume": 0.0,
+      "price_change_percentage_24h": -1.75664
+    },
+    {
+      "id": "aave-amm-unilinkweth",
+      "symbol": "aammunilinkweth",
+      "name": "Aave AMM UniLINKWETH",
+      "platforms": {
+        "ethereum": "0xb8db81b84d30e2387de0ff330420a4aaa6688134"
+      },
+      "market_cap_rank": null,
+      "current_price": 1217.54,
+      "market_cap": 0.0,
+      "total_volume": 0.0,
+      "price_change_percentage_24h": -5.53
+    },
+    {
+      "id": "aave-amm-unimkrweth",
+      "symbol": "aammunimkrweth",
+      "name": "Aave AMM UniMKRWETH",
+      "platforms": {
+        "ethereum": "0x370adc71f67f581158dc56f539df5f399128ddf9"
+      },
+      "market_cap_rank": null,
+      "current_price": 7945.52,
+      "market_cap": 0.0,
+      "total_volume": 0.0,
+      "price_change_percentage_24h": -1.93609
+    },
+    {
+      "id": "aave-amm-unirenweth",
+      "symbol": "aammunirenweth",
+      "name": "Aave AMM UniRENWETH",
+      "platforms": {
+        "ethereum": "0xa9e201a4e269d6cd5e9f0fcbcb78520cf815878b"
+      },
+      "market_cap_rank": null,
+      "current_price": 40.63,
+      "market_cap": 0.0,
+      "total_volume": 0.0,
+      "price_change_percentage_24h": -2.5263
+    },
+    {
+      "id": "aave-amm-unisnxweth",
+      "symbol": "aammunisnxweth",
+      "name": "Aave AMM UniSNXWETH",
+      "platforms": {
+        "ethereum": "0x38e491a71291cd43e8de63b7253e482622184894"
+      },
+      "market_cap_rank": null,
+      "current_price": 264.36,
+      "market_cap": 0.0,
+      "total_volume": 0.0,
+      "price_change_percentage_24h": -2.43999
+    },
+    {
+      "id": "aave-amm-uniuniweth",
+      "symbol": "aammuniuniweth",
+      "name": "Aave AMM UniUNIWETH",
+      "platforms": {
+        "ethereum": "0x3d26dcd840fcc8e4b2193ace8a092e4a65832f9f"
+      },
+      "market_cap_rank": null,
+      "current_price": 1069.81,
+      "market_cap": 0.0,
+      "total_volume": 0.0,
+      "price_change_percentage_24h": -5.41379
+    },
+    {
+      "id": "0x-leverage",
+      "symbol": "oxl",
+      "name": "0x Leverage",
+      "platforms": {
+        "ethereum": "0x03ee5026c07d85ff8ae791370dd0f4c1ae6c97fc"
+      },
+      "market_cap_rank": null,
+      "current_price": 0.00098598,
+      "market_cap": 0.0,
+      "total_volume": 3865.54,
+      "price_change_percentage_24h": -7.23042
+    },
+    {
+      "id": "99starz",
+      "symbol": "stz",
+      "name": "99Starz",
+      "platforms": {
+        "ethereum": "0x3f5294df68f871241c4b18fcf78ebd8ac18ab654",
+        "binance-smart-chain": "0x7fe378c5e0b5c32af2ecc8829bedf02245a0e4ef",
+        "polygon-pos": "0x2c92a8a41f4b806a6f6f1f7c9d9dec78dcd8c18e"
+      },
+      "market_cap_rank": null,
+      "current_price": 0.00583304,
+      "market_cap": 0.0,
+      "total_volume": 21550.0,
+      "price_change_percentage_24h": 0.37167
+    },
+    {
+      "id": "0x678-landwolf-1933",
+      "symbol": "wolf",
+      "name": "Landwolf",
+      "platforms": {
+        "ethereum": "0x67859a9314b9dca2642023ad8231beaa6cbf1933"
+      },
+      "market_cap_rank": null,
+      "current_price": 6.6778e-8,
+      "market_cap": 0.0,
+      "total_volume": 472.95,
+      "price_change_percentage_24h": null
+    },
+    {
+      "id": "1inch-yvault",
+      "symbol": "yv1inch",
+      "name": "1INCH yVault",
+      "platforms": {
+        "ethereum": "0xb8c3b7a2a618c552c23b1e4701109a9e756bab67"
+      },
+      "market_cap_rank": null,
+      "current_price": 0.25941,
+      "market_cap": 0.0,
+      "total_volume": 0.0,
+      "price_change_percentage_24h": -3.39172
+    }
+  ],
+  "last_updated": "2025-08-26T08:10:06.570360Z",
+  "total_count": 50
+}

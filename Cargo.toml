@@ -46,13 +46,23 @@ async-trait = "0.1"
 dotenv = "0.15"
 # Table formatting for terminal output
 tabled = "0.15"
+# SQLite database (in-memory for performance)
+rusqlite = { version = "0.32", features = ["bundled"] }
 
 [dev-dependencies]
 tokio-test = "0.4"
 
+[lib]
+name = "arbitrage_spy"
+path = "src/lib.rs"
+
 [[bin]]
 name = "arbitrage-spy"
 path = "src/main.rs"
+
+[[example]]
+name = "token_demo"
+path = "examples/token_demo.rs"
 
 [profile.release]
 opt-level = 3

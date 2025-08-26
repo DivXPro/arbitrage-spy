@@ -18,22 +18,16 @@ use std::time::Duration;
 use crate::config::DexConfig;
 use crate::dex::DexProvider;
 use crate::types::{Pool, Price, Token, TokenPair};
-use crate::utils::{adjust_for_decimals, str_to_bigdecimal};
+use crate::utils::str_to_bigdecimal;
 
 pub struct UniswapProvider {
     config: DexConfig,
-    client: Client,
     web3_provider: Arc<Provider<Http>>,
 }
 
 impl UniswapProvider {
     pub fn new(config: DexConfig) -> Self {
         Self::print_config_info(&config);
-
-        let client = Client::builder()
-            .timeout(Duration::from_secs(30))
-            .build()
-            .expect("Failed to create HTTP client");
 
         // 初始化 Web3 提供者
         let web3_provider = Arc::new(
@@ -42,7 +36,6 @@ impl UniswapProvider {
 
         Self {
             config,
-            client,
             web3_provider,
         }
     }
