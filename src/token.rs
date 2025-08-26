@@ -138,7 +138,29 @@ impl TokenManager {
 
         log::info!("Found {} Ethereum tokens", ethereum_tokens.len());
 
-        // Get market data for these tokens (in batches to avoid rate limits)
+        // Get market data for these tokens
+        let mut tokens = self.fetch_market_data(ethereum_tokens).await?;
+
+        // Sort by market cap rank (if available)
+        tokens.sort_by(|a, b| match (a.market_cap_rank, b.market_cap_rank) {
+            (Some(rank_a), Some(rank_b)) => rank_a.cmp(&rank_b),
+            (Some(_), None) => std::cmp::Ordering::Less,
+            (None, Some(_)) => std::cmp::Ordering::Greater,
+            (None, None) => a.symbol.cmp(&b.symbol),
+        });
+
+        let token_list = TokenList {
+            total_count: tokens.len(),
+            tokens,
+            last_updated: Utc::now(),
+        };
+
+        log::info!("Successfully fetched {} tokens", token_list.total_count);
+        Ok(token_list)
+    }
+
+    /// Fetch market data for a list of tokens
+    async fn fetch_market_data(&self, ethereum_tokens: Vec<CoinGeckoToken>) -> Result<Vec<Token>> {
         let mut tokens = Vec::new();
         let batch_size = 100;
 
@@ -209,28 +231,13 @@ impl TokenManager {
                 }
             }
 
-            // Rate limiting: wait between requests
+            // Rate limiting: wait between requests (30 requests per minute max)
             if chunk.len() == batch_size {
-                sleep(Duration::from_millis(1000)).await;
+                sleep(Duration::from_millis(2000)).await;
             }
         }
 
-        // Sort by market cap rank (if available)
-        tokens.sort_by(|a, b| match (a.market_cap_rank, b.market_cap_rank) {
-            (Some(rank_a), Some(rank_b)) => rank_a.cmp(&rank_b),
-            (Some(_), None) => std::cmp::Ordering::Less,
-            (None, Some(_)) => std::cmp::Ordering::Greater,
-            (None, None) => a.symbol.cmp(&b.symbol),
-        });
-
-        let token_list = TokenList {
-            total_count: tokens.len(),
-            tokens,
-            last_updated: Utc::now(),
-        };
-
-        log::info!("Successfully fetched {} tokens", token_list.total_count);
-        Ok(token_list)
+        Ok(tokens)
     }
 
     /// Update token list (fetch from API and save to cache)

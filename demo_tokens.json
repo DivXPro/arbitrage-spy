@@ -5,61 +5,61 @@
       "symbol": "aave",
       "name": "Aave",
       "platforms": {
-        "polygon-pos": "0xd6df932a45c0f255f85145f286ea0b292b21c90b",
+        "arbitrum-one": "0xba5ddd1f9d7f570dc94a51479a000e3bce967196",
+        "base": "0x63706e401c06ac8513145b7687a14804d17f814b",
         "harmony-shard-0": "0xcf323aad9e522b93f11c352caa519ad0e14eb40f",
-        "fantom": "0x6a07a792ab2965c72a5b8088d3a069a7ac3a993b",
+        "hydration": "asset_registry%2F1000624",
         "sora": "0x0091bd8d8295b25cab5a7b8b0e44498e678cfc15d872ede3215f7d4c7635ba36",
         "ethereum": "0x7fc66500c84a76ad7e9c93437bfc5ac33e2ddae9",
+        "optimistic-ethereum": "0x76fb31fb4af56892a25e32cfc43de717950c9278",
         "avalanche": "0x63a72806098bd3d9520cc43356dd78afe5d386d9",
         "huobi-token": "0x202b4936fe1a82a4965220860ae46d7d3939bb25",
-        "hydration": "asset_registry%2F1000624",
-        "optimistic-ethereum": "0x76fb31fb4af56892a25e32cfc43de717950c9278",
-        "arbitrum-one": "0xba5ddd1f9d7f570dc94a51479a000e3bce967196",
-        "near-protocol": "7fc66500c84a76ad7e9c93437bfc5ac33e2ddae9.factory.bridge.near",
+        "binance-smart-chain": "0xfb6115445bff7b52feb98650c87f44907e58f802",
+        "fantom": "0x6a07a792ab2965c72a5b8088d3a069a7ac3a993b",
+        "polygon-pos": "0xd6df932a45c0f255f85145f286ea0b292b21c90b",
         "energi": "0xa7f2f790355e0c32cab03f92f6eb7f488e6f049a",
-        "base": "0x63706e401c06ac8513145b7687a14804d17f814b",
-        "binance-smart-chain": "0xfb6115445bff7b52feb98650c87f44907e58f802"
+        "near-protocol": "7fc66500c84a76ad7e9c93437bfc5ac33e2ddae9.factory.bridge.near"
       },
       "market_cap_rank": 38,
-      "current_price": 329.64,
-      "market_cap": 5008731222.0,
-      "total_volume": 746894940.0,
-      "price_change_percentage_24h": 0.08342
+      "current_price": 327.96,
+      "market_cap": 4989450084.0,
+      "total_volume": 793897431.0,
+      "price_change_percentage_24h": 0.7213
     },
     {
       "id": "1inch",
       "symbol": "1inch",
       "name": "1inch",
       "platforms": {
-        "binance-smart-chain": "0x111111111117dc0aa78b770fa6a738034120c302",
+        "energi": "0xdda6205dc3f47e5280eb726613b27374eee9d130",
         "near-protocol": "111111111117dc0aa78b770fa6a738034120c302.factory.bridge.near",
+        "binance-smart-chain": "0x111111111117dc0aa78b770fa6a738034120c302",
         "polygon-pos": "0x9c2c5fd7b07e95ee044ddeba0e97a665f142394f",
-        "harmony-shard-0": "0x58f1b044d8308812881a1433d9bbeff99975e70c",
-        "avalanche": "0xd501281565bf7789224523144fe5d98e8b28f267",
         "ethereum": "0x111111111117dc0aa78b770fa6a738034120c302",
-        "energi": "0xdda6205dc3f47e5280eb726613b27374eee9d130"
+        "harmony-shard-0": "0x58f1b044d8308812881a1433d9bbeff99975e70c",
+        "avalanche": "0xd501281565bf7789224523144fe5d98e8b28f267"
       },
-      "market_cap_rank": 237,
-      "current_price": 0.242557,
-      "market_cap": 338607558.0,
-      "total_volume": 24535809.0,
-      "price_change_percentage_24h": -3.20374
+      "market_cap_rank": 239,
+      "current_price": 0.244542,
+      "market_cap": 341150481.0,
+      "total_volume": 22132467.0,
+      "price_change_percentage_24h": -3.20036
     },
     {
       "id": "0x",
       "symbol": "zrx",
       "name": "0x Protocol",
       "platforms": {
-        "avalanche": "0x596fa47043f99a4e0f122243b841e55375cde0d2",
         "energi": "0x591c19dc0821704bedaa5bbc6a66fee277d9437e",
         "ethereum": "0xe41d2489571d322189246dafa5ebde1f4699f498",
+        "avalanche": "0x596fa47043f99a4e0f122243b841e55375cde0d2",
         "harmony-shard-0": "0x8143e2a1085939caa9cef6665c2ff32f7bc08435"
       },
-      "market_cap_rank": 326,
-      "current_price": 0.237912,
-      "market_cap": 201769137.0,
-      "total_volume": 21332667.0,
-      "price_change_percentage_24h": -3.05335
+      "market_cap_rank": 323,
+      "current_price": 0.242202,
+      "market_cap": 205307195.0,
+      "total_volume": 19653158.0,
+      "price_change_percentage_24h": -1.42357
     },
     {
       "id": "0x0-ai-ai-smart-contract",
@@ -68,11 +68,11 @@
       "platforms": {
         "ethereum": "0x5a3e6a77ba2f983ec0d371ea3b475f8bc0811ad5"
       },
-      "market_cap_rank": 909,
-      "current_price": 0.04531146,
-      "market_cap": 40145717.0,
-      "total_volume": 357336.0,
-      "price_change_percentage_24h": -4.06434
+      "market_cap_rank": 926,
+      "current_price": 0.04388278,
+      "market_cap": 39100996.0,
+      "total_volume": 295736.0,
+      "price_change_percentage_24h": -5.36311
     },
     {
       "id": "69420",
@@ -81,7 +81,7 @@
       "platforms": {
         "ethereum": "0x69cbaf6c147086c3c234385556f8a0c6488d3420"
       },
-      "market_cap_rank": 1557,
+      "market_cap_rank": 1564,
       "current_price": 0.00022008,
       "market_cap": 13755450.0,
       "total_volume": 0.0,
@@ -94,11 +94,11 @@
       "platforms": {
         "ethereum": "0xe0a458bf4acf353cb45e211281a334bb1d837885"
       },
-      "market_cap_rank": 1938,
-      "current_price": 1.06003e-13,
-      "market_cap": 8164639.0,
-      "total_volume": 46279.0,
-      "price_change_percentage_24h": -8.04532
+      "market_cap_rank": 1926,
+      "current_price": 1.09055e-13,
+      "market_cap": 8411414.0,
+      "total_volume": 32719.0,
+      "price_change_percentage_24h": -1.96911
     },
     {
       "id": "0xgasless-2",
@@ -107,11 +107,11 @@
       "platforms": {
         "ethereum": "0x5fc111f3fa4c6b32eaf65659cfebdeed57234069"
       },
-      "market_cap_rank": 2226,
-      "current_price": 0.515002,
-      "market_cap": 5665019.0,
-      "total_volume": 9404.65,
-      "price_change_percentage_24h": -1.58564
+      "market_cap_rank": 2215,
+      "current_price": 0.522781,
+      "market_cap": 5744907.0,
+      "total_volume": 7320.78,
+      "price_change_percentage_24h": 0.24956
     },
     {
       "id": "4everland",
@@ -121,11 +121,11 @@
         "ethereum": "0xe355de6a6043b0580ff5a26b46051a4809b12793",
         "binance-smart-chain": "0x63ec886286f30ad392749b9e8f24f67f5b8ac394"
       },
-      "market_cap_rank": 2398,
-      "current_price": 0.00252722,
-      "market_cap": 4562538.0,
-      "total_volume": 349859.0,
-      "price_change_percentage_24h": -9.12033
+      "market_cap_rank": 2387,
+      "current_price": 0.00256011,
+      "market_cap": 4647719.0,
+      "total_volume": 383834.0,
+      "price_change_percentage_24h": -7.81821
     },
     {
       "id": "99-bitcoins",
@@ -134,11 +134,11 @@
       "platforms": {
         "ethereum": "0xc2eb40516ecaac04ae9964934983d1e9ebdf51fd"
       },
-      "market_cap_rank": 3798,
-      "current_price": 0.00001907,
-      "market_cap": 1260105.0,
-      "total_volume": 2493.56,
-      "price_change_percentage_24h": -5.05413
+      "market_cap_rank": 3789,
+      "current_price": 0.00001929,
+      "market_cap": 1271812.0,
+      "total_volume": 262.82,
+      "price_change_percentage_24h": -6.6545
     },
     {
       "id": "5ire",
@@ -147,25 +147,11 @@
       "platforms": {
         "ethereum": "0x3bd7d4f524d09f4e331577247a048d56e4b67a7f"
       },
-      "market_cap_rank": 5084,
-      "current_price": 0.00076511,
-      "market_cap": 490912.0,
-      "total_volume": 197306.0,
-      "price_change_percentage_24h": -0.08049
-    },
-    {
-      "id": "aag-ventures",
-      "symbol": "aag",
-      "name": "AAG",
-      "platforms": {
-        "harmony-shard-0": "0xae0609a062a4eaed49de28c5f6a193261e0150ea",
-        "ethereum": "0x5ba19d656b65f1684cfea4af428c23b9f3628f97"
-      },
-      "market_cap_rank": 5119,
-      "current_price": 0.00073574,
-      "market_cap": 477161.0,
-      "total_volume": 6.24,
-      "price_change_percentage_24h": null
+      "market_cap_rank": 5101,
+      "current_price": 0.00076236,
+      "market_cap": 489301.0,
+      "total_volume": 207429.0,
+      "price_change_percentage_24h": 1.78174
     },
     {
       "id": "aarna-atv111",
@@ -174,24 +160,25 @@
       "platforms": {
         "ethereum": "0x72ec8447074dc0bfbedfb516cc250b525f3a4aba"
       },
-      "market_cap_rank": 5149,
-      "current_price": 101.7,
-      "market_cap": 465691.0,
+      "market_cap_rank": 5169,
+      "current_price": 101.71,
+      "market_cap": 465809.0,
       "total_volume": 0.0,
-      "price_change_percentage_24h": 0.01583
+      "price_change_percentage_24h": 0.01328
     },
     {
-      "id": "aarna-atv-usdc-ethereum",
-      "symbol": "atvusdc",
-      "name": "aarna atv USDC (Ethereum)",
+      "id": "aag-ventures",
+      "symbol": "aag",
+      "name": "AAG",
       "platforms": {
-        "ethereum": "0xf30f62963cce132f32306d7f18a8587958b30ea9"
+        "ethereum": "0x5ba19d656b65f1684cfea4af428c23b9f3628f97",
+        "harmony-shard-0": "0xae0609a062a4eaed49de28c5f6a193261e0150ea"
       },
-      "market_cap_rank": 5466,
-      "current_price": 101.7,
-      "market_cap": 368223.0,
-      "total_volume": 0.0,
-      "price_change_percentage_24h": 0.01583
+      "market_cap_rank": 5177,
+      "current_price": 0.00070543,
+      "market_cap": 457748.0,
+      "total_volume": 0.58261,
+      "price_change_percentage_24h": 1.26173
     },
     {
       "id": "88mph",
@@ -200,11 +187,24 @@
       "platforms": {
         "ethereum": "0x8888801af4d980682e47f1a9036e589479e835c5"
       },
-      "market_cap_rank": 5479,
-      "current_price": 0.278165,
-      "market_cap": 363898.0,
-      "total_volume": 85.05,
-      "price_change_percentage_24h": -5.13085
+      "market_cap_rank": 5437,
+      "current_price": 0.293213,
+      "market_cap": 383589.0,
+      "total_volume": 80.22,
+      "price_change_percentage_24h": 0.00055
+    },
+    {
+      "id": "aarna-atv-usdc-ethereum",
+      "symbol": "atvusdc",
+      "name": "aarna atv USDC (Ethereum)",
+      "platforms": {
+        "ethereum": "0xf30f62963cce132f32306d7f18a8587958b30ea9"
+      },
+      "market_cap_rank": 5490,
+      "current_price": 101.71,
+      "market_cap": 368338.0,
+      "total_volume": 0.0,
+      "price_change_percentage_24h": 0.01328
     },
     {
       "id": "3space-art",
@@ -213,11 +213,11 @@
       "platforms": {
         "ethereum": "0x8bc2bcb1b1896291942c36f3cca3c1afa0aaa7fd"
       },
-      "market_cap_rank": 5558,
-      "current_price": 0.00520004,
-      "market_cap": 343330.0,
-      "total_volume": 21539.0,
-      "price_change_percentage_24h": -2.39386
+      "market_cap_rank": 5517,
+      "current_price": 0.00546403,
+      "market_cap": 360559.0,
+      "total_volume": 19890.41,
+      "price_change_percentage_24h": -0.05858
     },
     {
       "id": "0chain",
@@ -227,11 +227,11 @@
         "polygon-pos": "0x8bb30e0e67b11b978a5040144c410e1ccddcba30",
         "ethereum": "0xb9ef770b6a5e12e45983c5d80545258aa38f3b78"
       },
-      "market_cap_rank": 5848,
-      "current_price": 0.00580679,
-      "market_cap": 281055.0,
-      "total_volume": 167.83,
-      "price_change_percentage_24h": 1.07311
+      "market_cap_rank": 5875,
+      "current_price": 0.00577938,
+      "market_cap": 279728.0,
+      "total_volume": 167.03,
+      "price_change_percentage_24h": -40.40221
     },
     {
       "id": "0xshadow",
@@ -240,11 +240,11 @@
       "platforms": {
         "ethereum": "0x6748cde4ebabdba761e67172415d72b499d1d75b"
       },
-      "market_cap_rank": 5897,
-      "current_price": 0.00271048,
-      "market_cap": 271375.0,
-      "total_volume": 5476.04,
-      "price_change_percentage_24h": -11.79842
+      "market_cap_rank": 6100,
+      "current_price": 0.00240001,
+      "market_cap": 239741.0,
+      "total_volume": 8092.51,
+      "price_change_percentage_24h": -22.71339
     },
     {
       "id": "aarna-afi-802v2",
@@ -253,26 +253,26 @@
       "platforms": {
         "ethereum": "0xb68e430c56ed9e548e864a68a60f9d41f993b32c"
       },
-      "market_cap_rank": 6529,
-      "current_price": 71.04,
-      "market_cap": 176499.0,
+      "market_cap_rank": 6535,
+      "current_price": 71.56,
+      "market_cap": 177980.0,
       "total_volume": 0.0,
-      "price_change_percentage_24h": -2.55027
+      "price_change_percentage_24h": -1.69757
     },
     {
       "id": "1art",
       "symbol": "1art",
       "name": "OneArt",
       "platforms": {
-        "ethereum": "0xd3c325848d7c6e29b574cb0789998b2ff901f17e",
         "fantom": "0xd3c325848d7c6e29b574cb0789998b2ff901f17e",
+        "ethereum": "0xd3c325848d7c6e29b574cb0789998b2ff901f17e",
         "binance-smart-chain": "0xd3c325848d7c6e29b574cb0789998b2ff901f17e"
       },
-      "market_cap_rank": 7024,
-      "current_price": 0.00039841,
-      "market_cap": 125445.0,
-      "total_volume": 17.18,
-      "price_change_percentage_24h": -1.38071
+      "market_cap_rank": 7015,
+      "current_price": 0.00040346,
+      "market_cap": 127037.0,
+      "total_volume": 18.11,
+      "price_change_percentage_24h": -1.01222
     },
     {
       "id": "0xgen",
@@ -281,11 +281,11 @@
       "platforms": {
         "ethereum": "0x683c8e87e74f3f8f27c0d2ebd4350fe4dba814ef"
       },
-      "market_cap_rank": 7078,
-      "current_price": 0.00028522,
-      "market_cap": 121524.0,
-      "total_volume": 26387.0,
-      "price_change_percentage_24h": 1.66698
+      "market_cap_rank": 7047,
+      "current_price": 0.00028717,
+      "market_cap": 122352.0,
+      "total_volume": 25929.0,
+      "price_change_percentage_24h": -5.19319
     },
     {
       "id": "8pay",
@@ -293,27 +293,14 @@
       "name": "8Pay",
       "platforms": {
         "binance-smart-chain": "0x6eadc05928acd93efb3fa0dfbc644d96c6aa1df8",
-        "polygon-pos": "0x06ddb3a8bc0abc14f85e974cf1a93a6f8d4909d9",
-        "ethereum": "0x06ddb3a8bc0abc14f85e974cf1a93a6f8d4909d9"
+        "ethereum": "0x06ddb3a8bc0abc14f85e974cf1a93a6f8d4909d9",
+        "polygon-pos": "0x06ddb3a8bc0abc14f85e974cf1a93a6f8d4909d9"
       },
-      "market_cap_rank": 7126,
-      "current_price": 0.00180877,
-      "market_cap": 117078.0,
-      "total_volume": 108.94,
-      "price_change_percentage_24h": null
-    },
-    {
-      "id": "-3",
-      "symbol": "meow",
-      "name": "Meow Meow Coin",
-      "platforms": {
-        "ethereum": "0x77be1ba1cd2d7a63bffc772d361168cc327dd8bc"
-      },
-      "market_cap_rank": 7233,
-      "current_price": 2.57325e-7,
-      "market_cap": 108254.0,
-      "total_volume": 22.87,
-      "price_change_percentage_24h": -2.86514
+      "market_cap_rank": 7169,
+      "current_price": 0.00177825,
+      "market_cap": 115102.0,
+      "total_volume": 85.43,
+      "price_change_percentage_24h": 0.82795
     },
     {
       "id": "aarna-atv-808",
@@ -322,11 +309,11 @@
       "platforms": {
         "ethereum": "0x60697825812ecc1fff07f41e2d3f5cf314674fa6"
       },
-      "market_cap_rank": 7355,
-      "current_price": 160.96,
-      "market_cap": 99804.0,
+      "market_cap_rank": 7351,
+      "current_price": 162.96,
+      "market_cap": 101291.0,
       "total_volume": 0.0,
-      "price_change_percentage_24h": -3.12196
+      "price_change_percentage_24h": -1.15273
     },
     {
       "id": "0-knowledge-network",
@@ -335,7 +322,7 @@
       "platforms": {
         "ethereum": "0x4594cffbfc09bc5e7ecf1c2e1c1e24f0f7d29036"
       },
-      "market_cap_rank": 8190,
+      "market_cap_rank": 8193,
       "current_price": 7.35e-6,
       "market_cap": 58694.0,
       "total_volume": 42.95,
@@ -348,11 +335,11 @@
       "platforms": {
         "ethereum": "0xb772c8745c46c8868610dcecdcefc803cfdf28f5"
       },
-      "market_cap_rank": 8554,
+      "market_cap_rank": 8569,
       "current_price": 0.00037526,
       "market_cap": 45300.0,
       "total_volume": 36.77,
-      "price_change_percentage_24h": -5.23714
+      "price_change_percentage_24h": -4.3922
     },
     {
       "id": "47th-potus",
@@ -361,11 +348,11 @@
       "platforms": {
         "ethereum": "0x535887989b9edffb63b1fd5c6b99a4d45443b49a"
       },
-      "market_cap_rank": 8880,
+      "market_cap_rank": 8892,
       "current_price": 0.00003677,
       "market_cap": 36771.0,
       "total_volume": 41.14,
-      "price_change_percentage_24h": 0.998
+      "price_change_percentage_24h": null
     },
     {
       "id": "0xprivacy",
@@ -374,7 +361,7 @@
       "platforms": {
         "ethereum": "0x46b7cb31a4a6375c69a6d0b9ed9261fb649adb83"
       },
-      "market_cap_rank": 10214,
+      "market_cap_rank": 10218,
       "current_price": 0.00013131,
       "market_cap": 15757.0,
       "total_volume": 49.53,
@@ -387,11 +374,24 @@
       "platforms": {
         "ethereum": "0x4278a8944cf63753b13e9f726bbc1192412988d8"
       },
-      "market_cap_rank": 10254,
-      "current_price": 0.00001791,
-      "market_cap": 15273.77,
-      "total_volume": 57.73,
-      "price_change_percentage_24h": -3.87993
+      "market_cap_rank": 10280,
+      "current_price": 0.00001826,
+      "market_cap": 15082.36,
+      "total_volume": 58.86,
+      "price_change_percentage_24h": -1.38168
+    },
+    {
+      "id": "-3",
+      "symbol": "meow",
+      "name": "Meow Meow Coin",
+      "platforms": {
+        "ethereum": "0x77be1ba1cd2d7a63bffc772d361168cc327dd8bc"
+      },
+      "market_cap_rank": 10549,
+      "current_price": 2.9e-8,
+      "market_cap": 12199.99,
+      "total_volume": 0.081463,
+      "price_change_percentage_24h": -89.05306
     },
     {
       "id": "0dog",
@@ -411,23 +411,23 @@
       "symbol": "1mil",
       "name": "1MillionNFTs",
       "platforms": {
-        "near-protocol": "a4ef4b0b23c1fc81d3f9ecf93510e64f58a4a016.factory.bridge.near",
-        "ethereum": "0xa4ef4b0b23c1fc81d3f9ecf93510e64f58a4a016"
+        "ethereum": "0xa4ef4b0b23c1fc81d3f9ecf93510e64f58a4a016",
+        "near-protocol": "a4ef4b0b23c1fc81d3f9ecf93510e64f58a4a016.factory.bridge.near"
       },
       "market_cap_rank": null,
-      "current_price": 0.03181721,
+      "current_price": 0.03185675,
       "market_cap": 0.0,
-      "total_volume": 98.21,
-      "price_change_percentage_24h": -0.98129
+      "total_volume": 98.34,
+      "price_change_percentage_24h": -0.51062
     },
     {
       "id": "3a-lending-protocol",
       "symbol": "a3a",
       "name": "3A",
       "platforms": {
-        "polygon-pos": "0x58c7b2828e7f2b2caa0cc7feef242fa3196d03df",
         "ethereum": "0x3f817b28da4940f018c6b5c0a11c555ebb1264f9",
-        "linea": "0x3d4b2132ed4ea0aa93903713a4de9f98e625a5c7"
+        "linea": "0x3d4b2132ed4ea0aa93903713a4de9f98e625a5c7",
+        "polygon-pos": "0x58c7b2828e7f2b2caa0cc7feef242fa3196d03df"
       },
       "market_cap_rank": null,
       "current_price": 0.0001662,
@@ -457,10 +457,10 @@
         "ethereum": "0xffc97d72e13e01096502cb8eb52dee56f74dad7b"
       },
       "market_cap_rank": null,
-      "current_price": 330.23,
+      "current_price": 329.58,
       "market_cap": 0.0,
-      "total_volume": 81333.0,
-      "price_change_percentage_24h": -1.29256
+      "total_volume": 376677.0,
+      "price_change_percentage_24h": -0.16352
     },
     {
       "id": "aave-amm-bptbalweth",
@@ -470,10 +470,10 @@
         "ethereum": "0xd109b2a304587569c84308c55465cd9ff0317bfb"
       },
       "market_cap_rank": null,
-      "current_price": 86.9,
+      "current_price": 90.4,
       "market_cap": 0.0,
       "total_volume": 0.0,
-      "price_change_percentage_24h": -2.98586
+      "price_change_percentage_24h": 1.73107
     },
     {
       "id": "aave-amm-bptwbtcweth",
@@ -483,10 +483,10 @@
         "ethereum": "0x358bd0d980e031e23eba9aa793926857703783bd"
       },
       "market_cap_rank": null,
-      "current_price": 351973.0,
+      "current_price": 355307.0,
       "market_cap": 0.0,
       "total_volume": 0.0,
-      "price_change_percentage_24h": -1.46305
+      "price_change_percentage_24h": -1.00331
     },
     {
       "id": "aave-amm-dai",
@@ -496,10 +496,10 @@
         "ethereum": "0x79be75ffc64dd58e66787e4eae470c8a1fd08ba4"
       },
       "market_cap_rank": null,
-      "current_price": 0.999417,
+      "current_price": 0.996689,
       "market_cap": 0.0,
       "total_volume": 0.0,
-      "price_change_percentage_24h": -0.17506
+      "price_change_percentage_24h": -0.0387
     },
     {
       "id": "aave-amm-uniaaveweth",
@@ -509,10 +509,10 @@
         "ethereum": "0xe59d2ff6995a926a574390824a657eed36801e55"
       },
       "market_cap_rank": null,
-      "current_price": 3801.39,
+      "current_price": 3832.66,
       "market_cap": 0.0,
       "total_volume": 0.0,
-      "price_change_percentage_24h": -2.32914
+      "price_change_percentage_24h": -0.86901
     },
     {
       "id": "aave-amm-unibatweth",
@@ -522,10 +522,10 @@
         "ethereum": "0xa1b0edf4460cc4d8bfaa18ed871bff15e5b57eb4"
       },
       "market_cap_rank": null,
-      "current_price": 78.97,
+      "current_price": 79.6,
       "market_cap": 0.0,
       "total_volume": 0.0,
-      "price_change_percentage_24h": -3.40311
+      "price_change_percentage_24h": -2.87701
     },
     {
       "id": "aave-amm-unicrvweth",
@@ -535,10 +535,10 @@
         "ethereum": "0x0ea20e7ffb006d4cfe84df2f72d8c7bd89247db0"
       },
       "market_cap_rank": null,
-      "current_price": 1443.1,
+      "current_price": 1457.02,
       "market_cap": 0.0,
       "total_volume": 0.0,
-      "price_change_percentage_24h": -5.28801
+      "price_change_percentage_24h": -3.93817
     },
     {
       "id": "aave-amm-unidaiusdc",
@@ -548,10 +548,10 @@
         "ethereum": "0xe340b25fe32b1011616bb8ec495a4d503e322177"
       },
       "market_cap_rank": null,
-      "current_price": 2263780.0,
+      "current_price": 2263485.0,
       "market_cap": 0.0,
       "total_volume": 0.0,
-      "price_change_percentage_24h": -0.16611
+      "price_change_percentage_24h": -0.02802
     },
     {
       "id": "aave-amm-unidaiweth",
@@ -561,10 +561,10 @@
         "ethereum": "0x9303eabc860a743aabcc3a1629014cabcc3f8d36"
       },
       "market_cap_rank": null,
-      "current_price": 279.43,
+      "current_price": 281.66,
       "market_cap": 0.0,
       "total_volume": 0.0,
-      "price_change_percentage_24h": -1.75664
+      "price_change_percentage_24h": -1.01056
     },
     {
       "id": "aave-amm-unilinkweth",
@@ -574,10 +574,10 @@
         "ethereum": "0xb8db81b84d30e2387de0ff330420a4aaa6688134"
       },
       "market_cap_rank": null,
-      "current_price": 1217.54,
+      "current_price": 1254.52,
       "market_cap": 0.0,
       "total_volume": 0.0,
-      "price_change_percentage_24h": -5.53
+      "price_change_percentage_24h": -1.54273
     },
     {
       "id": "aave-amm-unimkrweth",
@@ -587,10 +587,10 @@
         "ethereum": "0x370adc71f67f581158dc56f539df5f399128ddf9"
       },
       "market_cap_rank": null,
-      "current_price": 7945.52,
+      "current_price": 8136.73,
       "market_cap": 0.0,
       "total_volume": 0.0,
-      "price_change_percentage_24h": -1.93609
+      "price_change_percentage_24h": 1.16717
     },
     {
       "id": "aave-amm-unirenweth",
@@ -600,10 +600,10 @@
         "ethereum": "0xa9e201a4e269d6cd5e9f0fcbcb78520cf815878b"
       },
       "market_cap_rank": null,
-      "current_price": 40.63,
+      "current_price": 40.99,
       "market_cap": 0.0,
       "total_volume": 0.0,
-      "price_change_percentage_24h": -2.5263
+      "price_change_percentage_24h": -2.01919
     },
     {
       "id": "aave-amm-unisnxweth",
@@ -613,10 +613,10 @@
         "ethereum": "0x38e491a71291cd43e8de63b7253e482622184894"
       },
       "market_cap_rank": null,
-      "current_price": 264.36,
+      "current_price": 266.44,
       "market_cap": 0.0,
       "total_volume": 0.0,
-      "price_change_percentage_24h": -2.43999
+      "price_change_percentage_24h": -1.99033
     },
     {
       "id": "aave-amm-uniuniweth",
@@ -626,10 +626,10 @@
         "ethereum": "0x3d26dcd840fcc8e4b2193ace8a092e4a65832f9f"
       },
       "market_cap_rank": null,
-      "current_price": 1069.81,
+      "current_price": 1080.18,
       "market_cap": 0.0,
       "total_volume": 0.0,
-      "price_change_percentage_24h": -5.41379
+      "price_change_percentage_24h": -2.94653
     },
     {
       "id": "0x-leverage",
@@ -639,10 +639,10 @@
         "ethereum": "0x03ee5026c07d85ff8ae791370dd0f4c1ae6c97fc"
       },
       "market_cap_rank": null,
-      "current_price": 0.00098598,
+      "current_price": 0.00101095,
       "market_cap": 0.0,
-      "total_volume": 3865.54,
-      "price_change_percentage_24h": -7.23042
+      "total_volume": 993.34,
+      "price_change_percentage_24h": -2.86696
     },
     {
       "id": "99starz",
@@ -650,14 +650,14 @@
       "name": "99Starz",
       "platforms": {
         "ethereum": "0x3f5294df68f871241c4b18fcf78ebd8ac18ab654",
-        "binance-smart-chain": "0x7fe378c5e0b5c32af2ecc8829bedf02245a0e4ef",
-        "polygon-pos": "0x2c92a8a41f4b806a6f6f1f7c9d9dec78dcd8c18e"
+        "polygon-pos": "0x2c92a8a41f4b806a6f6f1f7c9d9dec78dcd8c18e",
+        "binance-smart-chain": "0x7fe378c5e0b5c32af2ecc8829bedf02245a0e4ef"
       },
       "market_cap_rank": null,
-      "current_price": 0.00583304,
+      "current_price": 0.00544208,
       "market_cap": 0.0,
-      "total_volume": 21550.0,
-      "price_change_percentage_24h": 0.37167
+      "total_volume": 19789.04,
+      "price_change_percentage_24h": -11.19077
     },
     {
       "id": "0x678-landwolf-1933",
@@ -680,12 +680,12 @@
         "ethereum": "0xb8c3b7a2a618c552c23b1e4701109a9e756bab67"
       },
       "market_cap_rank": null,
-      "current_price": 0.25941,
+      "current_price": 0.261273,
       "market_cap": 0.0,
       "total_volume": 0.0,
-      "price_change_percentage_24h": -3.39172
+      "price_change_percentage_24h": -3.03493
     }
   ],
-  "last_updated": "2025-08-26T08:10:06.570360Z",
+  "last_updated": "2025-08-26T15:53:09.077863513Z",
   "total_count": 50
 }
