@@ -48,6 +48,8 @@ dotenv = "0.15"
 tabled = "0.15"
 # SQLite database (in-memory for performance)
 rusqlite = { version = "0.32", features = ["bundled"] }
+# Command line argument parsing
+clap = { version = "4.0", features = ["derive"] }
 
 [dev-dependencies]
 tokio-test = "0.4"

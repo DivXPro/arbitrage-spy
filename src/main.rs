@@ -1,4 +1,5 @@
 use anyhow::Result;
+use clap::{Arg, Command};
 use log::{error, info};
 use std::time::Duration;
 use tokio::time;
@@ -16,6 +17,9 @@ use database::Database;
 use monitor::ArbitrageMonitor;
 use token::TokenManager;
 
+// 命令行参数常量
+const UPDATE_TOKENS_ARG: &str = "update-tokens";
+
 #[tokio::main]
 async fn main() -> Result<()> {
     // 加载 .env 文件
@@ -23,6 +27,18 @@ async fn main() -> Result<()> {
 
     // 初始化日志系统
     env_logger::init();
+
+    // 解析命令行参数
+    let matches = Command::new("arbitrage-spy")
+        .version("1.0")
+        .about("区块链套利监控系统")
+        .arg(
+            Arg::new(UPDATE_TOKENS_ARG)
+                .long(UPDATE_TOKENS_ARG)
+                .help("更新 token 数据")
+                .action(clap::ArgAction::SetTrue),
+        )
+        .get_matches();
 
     info!("启动区块链套利监控系统...");
 
@@ -32,73 +48,74 @@ async fn main() -> Result<()> {
 
     // 初始化数据库
     info!("初始化数据库...");
-    let database = Database::new(Some("tokens.db"))?;
+    let database = Database::new(Some("data/tokens.db"))?;
     info!("数据库初始化完成");
 
-    // 初始化token管理器并更新token数据
-    info!("初始化token数据...");
-    let token_manager = TokenManager::new(Some("data/tokens.json".to_string()));
-    match token_manager.update_tokens(None).await {
-        Ok(token_list) => {
-            info!("成功加载 {} 个token", token_list.total_count);
-
-            // 将token数据保存到数据库
-            match database.save_tokens(&token_list.tokens) {
-                Ok(_) => {
-                    info!("token数据已成功保存到数据库");
-
-                    // 验证数据库中的数据
-                    match database.get_stats() {
-                        Ok((count, last_update)) => {
-                            info!(
-                                "数据库统计: {} 个token，最后更新时间: {}",
-                                count, last_update
-                            );
-                        }
-                        Err(e) => {
-                            error!("获取数据库统计失败: {}", e);
-                        }
-                    }
-
-                    // 测试查找功能
-                    if let Ok(Some(btc_token)) = database.find_token_by_symbol("BTC") {
-                        info!("找到BTC token: {} - {}", btc_token.name, btc_token.symbol);
-                    }
-                }
-                Err(e) => {
-                    error!("保存token数据到数据库失败: {}", e);
-                }
-            }
-        }
-        Err(e) => {
-            error!("加载token数据失败: {}", e);
-            info!("将使用空的token列表继续运行");
-        }
+    // 检查是否只需要更新 token
+    if matches.get_flag(UPDATE_TOKENS_ARG) {
+        info!("执行 token 更新命令...");
+        update_tokens(&database).await?;
+        info!("Token 更新完成");
+        return Ok(());
     }
 
+    // 正常启动模式 - 初始化完整的监控系统
+    info!("启动完整监控系统...");
+
+    // 初始化 Token 管理器
+    let token_manager = TokenManager::new(Some("data/tokens.json".to_string()));
+
+    // 获取并缓存 token 列表
+    info!("获取 token 列表...");
+    let token_list = token_manager.update_tokens(None).await?;
+    info!("获取到 {} 个 token", token_list.tokens.len());
+
+    // 保存到数据库
+    database.save_tokens(&token_list.tokens)?;
+    info!("Token 数据已保存到数据库");
+
+    // 显示数据库统计
+    let (total_tokens, last_update) = database.get_stats()?;
+    info!(
+        "数据库统计: 总计 {} 个 token，最后更新: {}",
+        total_tokens, last_update
+    );
+
+    // 初始化套利监控器
+    info!("初始化套利监控器...");
+    let mut monitor = ArbitrageMonitor::new(config).await?;
+    monitor.start_scan().await;
+
+    // 开始监控
+    info!("开始监控套利机会...");
+    // monitor.start_monitoring().await?;
+    info!("监控系统已启动");
+
     Ok(())
-    // 创建监控器
-    // let mut monitor = ArbitrageMonitor::new(config).await?;
-    // info!("监控器初始化完成");
+}
 
-    // 启动监控循环
-    // let mut interval = time::interval(Duration::from_secs(10));
+/// 独立的 token 更新功能
+async fn update_tokens(database: &Database) -> Result<()> {
+    info!("开始更新 token 数据...");
 
-    // loop {
-    //     interval.tick().await;
+    // 初始化 Token 管理器
+    let token_manager = TokenManager::new(Some("data/tokens.json".to_string()));
 
-    //     match monitor.scan_opportunities().await {
-    //         Ok(opportunities) => {
-    //             if !opportunities.is_empty() {
-    //                 info!("发现 {} 个套利机会", opportunities.len());
-    //                 for opportunity in opportunities {
-    //                     info!("套利机会: {:?}", opportunity);
-    //                 }
-    //             }
-    //         }
-    //         Err(e) => {
-    //             error!("扫描套利机会时出错: {}", e);
-    //         }
-    //     }
-    // }
+    // 获取 token 列表
+    info!("从 CoinGecko API 获取 token 列表...");
+    let token_list = token_manager.update_tokens(Some(500)).await?;
+    info!("获取到 {} 个 token", token_list.tokens.len());
+
+    // 保存到数据库
+    database.save_tokens(&token_list.tokens)?;
+    info!("Token 数据已保存到数据库");
+
+    // 显示更新后的统计
+    let (total_tokens, last_update) = database.get_stats()?;
+    info!(
+        "更新完成 - 总计 {} 个 token，最后更新: {}",
+        total_tokens, last_update
+    );
+
+    Ok(())
 }

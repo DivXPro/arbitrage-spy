@@ -4,7 +4,9 @@ use chrono::Utc;
 use log::{error, info, warn};
 use std::collections::HashMap;
 use std::str::FromStr;
+use std::time::Duration;
 use tabled::{settings::Style, Table};
+use tokio::time;
 
 use crate::config::Config;
 use crate::dex::balancer::BalancerProvider;
@@ -66,6 +68,29 @@ impl ArbitrageMonitor {
             config,
             dex_manager,
         })
+    }
+
+    pub async fn start_scan(&mut self) {
+        // 启动监控循环
+        let mut interval = time::interval(Duration::from_secs(10));
+
+        loop {
+            interval.tick().await;
+
+            match self.scan_opportunities().await {
+                Ok(opportunities) => {
+                    if !opportunities.is_empty() {
+                        info!("发现 {} 个套利机会", opportunities.len());
+                        for opportunity in opportunities {
+                            info!("套利机会: {:?}", opportunity);
+                        }
+                    }
+                }
+                Err(e) => {
+                    error!("扫描套利机会时出错: {}", e);
+                }
+            }
+        }
     }
 
     pub async fn scan_opportunities(&mut self) -> Result<Vec<ArbitrageOpportunity>> {
