@@ -121,9 +121,10 @@ impl TheGraphClient {
             variables,
         };
 
+        let url = format!("{}/A3Np3RQbaBA6oKJgiwDJeo5T3zrYfGHPWFYayMwtNDum", self.endpoint);
         let response = self
             .client
-            .post(&self.endpoint)
+            .post(&url)
             .json(&request)
             .send()
             .await?
@@ -202,9 +203,10 @@ impl TheGraphClient {
             variables,
         };
 
+        let url = format!("{}/A3Np3RQbaBA6oKJgiwDJeo5T3zrYfGHPWFYayMwtNDum", self.endpoint);
         let response = self
             .client
-            .post(&self.endpoint)
+            .post(&url)
             .json(&request)
             .send()
             .await?
