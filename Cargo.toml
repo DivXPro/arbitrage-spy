@@ -10,8 +10,8 @@ keywords = ["blockchain", "arbitrage", "dex", "defi", "monitoring"]
 categories = ["cryptocurrency", "finance"]
 
 [dependencies]
-# HTTP client for API requests
-reqwest = { version = "0.11", features = ["json"] }
+# HTTP client for API requests and GraphQL
+reqwest = { version = "0.11", features = ["json", "gzip"] }
 # Async runtime
 tokio = { version = "1.0", features = ["full"] }
 # JSON serialization
@@ -50,6 +50,8 @@ tabled = "0.15"
 rusqlite = { version = "0.32", features = ["bundled"] }
 # Command line argument parsing
 clap = { version = "4.0", features = ["derive"] }
+# GraphQL client for TheGraph queries
+graphql_client = "0.13"
 
 [dev-dependencies]
 tokio-test = "0.4"

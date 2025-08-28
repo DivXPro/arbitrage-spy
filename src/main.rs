@@ -8,6 +8,7 @@ mod config;
 mod database;
 mod dex;
 mod monitor;
+mod thegraph;
 mod token;
 mod types;
 mod utils;
@@ -15,6 +16,7 @@ mod utils;
 use config::Config;
 use database::Database;
 use monitor::ArbitrageMonitor;
+use thegraph::TheGraphClient;
 use token::TokenManager;
 
 // 命令行参数常量
@@ -116,6 +118,30 @@ async fn update_tokens(database: &Database) -> Result<()> {
         "更新完成 - 总计 {} 个 token，最后更新: {}",
         total_tokens, last_update
     );
+
+    // 获取 Uniswap V2 交易对
+    info!("从 TheGraph 获取 Uniswap V2 交易对...");
+    let graph_client = TheGraphClient::new();
+    match graph_client.get_top_pairs(100).await {
+        Ok(pairs) => {
+            info!("成功获取到 {} 个 Uniswap V2 交易对", pairs.len());
+            // 显示前几个交易对的信息
+            for (i, pair) in pairs.iter().take(3).enumerate() {
+                info!(
+                    "交易对 {}: {}/{} - 地址: {} - 24h交易量: ${} - 流动性: ${}",
+                    i + 1,
+                    pair.token0.symbol,
+                    pair.token1.symbol,
+                    pair.id,
+                    pair.volume_usd,
+                    pair.reserve_usd
+                );
+            }
+        }
+        Err(e) => {
+            error!("获取 Uniswap V2 交易对失败: {}", e);
+        }
+    }
 
     Ok(())
 }
