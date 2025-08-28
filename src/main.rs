@@ -18,7 +18,7 @@ use monitor::ArbitrageMonitor;
 use token::TokenManager;
 
 // 命令行参数常量
-const UPDATE_TOKENS_ARG: &str = "update-tokens";
+const UPDATE_TOKENS_ARG: &str = "update";
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -103,7 +103,7 @@ async fn update_tokens(database: &Database) -> Result<()> {
 
     // 获取 token 列表
     info!("从 CoinGecko API 获取 token 列表...");
-    let token_list = token_manager.update_tokens(Some(500)).await?;
+    let token_list = token_manager.update_tokens(None).await?;
     info!("获取到 {} 个 token", token_list.tokens.len());
 
     // 保存到数据库
