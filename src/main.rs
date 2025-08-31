@@ -65,11 +65,13 @@ async fn main() -> Result<()> {
     info!("启动完整监控系统...");
 
     // 初始化 Token 管理器
-    let token_manager = TokenManager::new(Some("data/tokens.json".to_string()));
+    let token_manager = TokenManager::new(
+        Some("data/tokens.db".to_string())
+    );
 
     // 获取并缓存 token 列表
     info!("获取 token 列表...");
-    let token_list = token_manager.update_tokens(None).await?;
+    let token_list = token_manager.fetch_tokens(None).await?;
     info!("获取到 {} 个 token", token_list.tokens.len());
 
     // 保存到数据库
@@ -101,11 +103,13 @@ async fn update_tokens(database: &Database) -> Result<()> {
     info!("开始更新 token 数据...");
 
     // 初始化 Token 管理器
-    let token_manager = TokenManager::new(Some("data/tokens.json".to_string()));
+    let token_manager = TokenManager::new(
+        Some("data/tokens.db".to_string())
+    );
 
     // 获取 token 列表
     info!("从 CoinGecko API 获取 token 列表...");
-    let token_list = token_manager.update_tokens(None).await?;
+    let token_list = token_manager.fetch_tokens(None).await?;
     info!("获取到 {} 个 token", token_list.tokens.len());
 
     // 保存到数据库

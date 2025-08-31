@@ -18,7 +18,7 @@ async fn main() -> Result<()> {
     
     // 获取token列表（使用缓存数据以避免API限制）
     info!("正在获取token列表...");
-    match token_manager.get_tokens(false, Some(50)).await {
+    match token_manager.get_tokens(Some(50)).await {
         Ok(token_list) => {
             info!("成功获取 {} 个token", token_list.total_count);
             info!("最后更新时间: {}", token_list.last_updated);

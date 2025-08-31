@@ -3,9 +3,8 @@ use chrono::{DateTime, Utc};
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::fs;
-use std::path::Path;
 use tokio::time::{sleep, Duration};
+use rusqlite::{Connection};
 
 /// Token information from CoinGecko API
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -54,45 +53,24 @@ struct CoinGeckoMarketData {
 /// Token manager for fetching and caching token data
 pub struct TokenManager {
     client: Client,
-    cache_file: String,
     api_base_url: String,
     api_key: Option<String>,
+    db_path: Option<String>,
 }
 
 impl TokenManager {
     /// Create a new TokenManager instance
-    pub fn new(cache_file: Option<String>) -> Self {
+    pub fn new(db_path: Option<String>) -> Self {
         let api_key = std::env::var("COINGECKO_API_KEY").ok();
 
         Self {
             client: Client::new(),
-            cache_file: cache_file.unwrap_or_else(|| "tokens.json".to_string()),
             api_base_url: "https://api.coingecko.com/api/v3".to_string(),
             api_key,
+            db_path,
         }
     }
 
-    /// Load token list from cache file
-    pub fn load_from_cache(&self) -> Result<TokenList> {
-        if !Path::new(&self.cache_file).exists() {
-            return Err(anyhow!("Cache file does not exist: {}", self.cache_file));
-        }
-
-        let content = fs::read_to_string(&self.cache_file)?;
-        let token_list: TokenList = serde_json::from_str(&content)?;
-
-        log::info!("Loaded {} tokens from cache", token_list.tokens.len());
-        Ok(token_list)
-    }
-
-    /// Save token list to cache file
-    pub fn save_to_cache(&self, token_list: &TokenList) -> Result<()> {
-        let content = serde_json::to_string_pretty(token_list)?;
-        fs::write(&self.cache_file, content)?;
-
-        log::info!("Saved {} tokens to cache", token_list.tokens.len());
-        Ok(())
-    }
 
     /// Fetch token list from CoinGecko API
     pub async fn fetch_tokens(&self, limit: Option<usize>) -> Result<TokenList> {
@@ -240,36 +218,76 @@ impl TokenManager {
         Ok(tokens)
     }
 
-    /// Update token list (fetch from API and save to cache)
-    pub async fn update_tokens(&self, limit: Option<usize>) -> Result<TokenList> {
-        let token_list = self.fetch_tokens(limit).await?;
-        self.save_to_cache(&token_list)?;
-        Ok(token_list)
-    }
-
-    /// Get token list (try cache first, then fetch if needed)
-    pub async fn get_tokens(&self, force_update: bool, limit: Option<usize>) -> Result<TokenList> {
-        if !force_update {
-            if let Ok(cached_list) = self.load_from_cache() {
-                // Check if cache is recent (less than 1 hour old)
-                let cache_age = Utc::now().signed_duration_since(cached_list.last_updated);
-                if cache_age.num_hours() < 1 {
-                    log::info!(
-                        "Using cached token list (age: {} minutes)",
-                        cache_age.num_minutes()
-                    );
-                    return Ok(cached_list);
-                }
+    /// Get token list from database
+    pub async fn get_tokens(&self, limit: Option<usize>) -> Result<TokenList> {
+        // Require database path to be configured
+        let db_path = self.db_path.as_ref()
+            .ok_or_else(|| anyhow::anyhow!("Database path not configured. Use new_with_db() to initialize TokenManager with database support."))?;
+        
+        // Load from database
+        match self.load_from_database(db_path, limit) {
+            Ok(token_list) => {
+                log::info!("Loaded {} tokens from database", token_list.tokens.len());
+                return Ok(token_list);
+            }
+            Err(e) => {
+                return Err(anyhow::anyhow!("Failed to load tokens from database: {}", e));
             }
         }
+    }
 
-        log::info!("Cache is stale or force update requested, fetching fresh data...");
-        self.update_tokens(limit).await
+    /// Load token list from database
+    fn load_from_database(&self, db_path: &str, limit: Option<usize>) -> Result<TokenList> {
+        let conn = Connection::open(db_path)?;
+        
+        let (query, params_vec): (&str, Vec<rusqlite::types::Value>) = if let Some(limit_val) = limit {
+            (
+                "SELECT id, symbol, name, market_cap_rank, current_price, market_cap, total_volume, price_change_percentage_24h, platforms FROM tokens ORDER BY market_cap_rank ASC LIMIT ?1",
+                vec![rusqlite::types::Value::Integer(limit_val as i64)]
+            )
+        } else {
+            (
+                "SELECT id, symbol, name, market_cap_rank, current_price, market_cap, total_volume, price_change_percentage_24h, platforms FROM tokens ORDER BY market_cap_rank ASC",
+                vec![]
+            )
+        };
+        
+        let mut stmt = conn.prepare(query)?;
+        let rows = stmt.query_map(rusqlite::params_from_iter(params_vec), |row| {
+            let platforms_json: String = row.get(8)?;
+            let platforms: HashMap<String, Option<String>> = 
+                serde_json::from_str(&platforms_json).unwrap_or_default();
+            
+            Ok(Token {
+                id: row.get(0)?,
+                symbol: row.get(1)?,
+                name: row.get(2)?,
+                platforms,
+                market_cap_rank: row.get(3)?,
+                current_price: row.get(4)?,
+                market_cap: row.get(5)?,
+                total_volume: row.get(6)?,
+                price_change_percentage_24h: row.get(7)?,
+            })
+        })?;
+        
+        let mut tokens = Vec::new();
+        for token_result in rows {
+            tokens.push(token_result?);
+        }
+        
+        let total_count = tokens.len();
+        
+        Ok(TokenList {
+            tokens,
+            last_updated: Utc::now(),
+            total_count,
+        })
     }
 
     /// Get token by symbol
     pub async fn get_token_by_symbol(&self, symbol: &str) -> Result<Option<Token>> {
-        let token_list = self.get_tokens(false, None).await?;
+        let token_list = self.get_tokens(None).await?;
         Ok(token_list
             .tokens
             .into_iter()
@@ -278,7 +296,7 @@ impl TokenManager {
 
     /// Get token by contract address
     pub async fn get_token_by_address(&self, address: &str) -> Result<Option<Token>> {
-        let token_list = self.get_tokens(false, None).await?;
+        let token_list = self.get_tokens(None).await?;
         Ok(token_list.tokens.into_iter().find(|t| {
             t.platforms
                 .values()
@@ -288,7 +306,7 @@ impl TokenManager {
 
     /// Get top tokens by market cap
     pub async fn get_top_tokens(&self, limit: usize) -> Result<Vec<Token>> {
-        let token_list = self.get_tokens(false, None).await?;
+        let token_list = self.get_tokens(None).await?;
         Ok(token_list.tokens.into_iter().take(limit).collect())
     }
 }
@@ -296,12 +314,6 @@ impl TokenManager {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[tokio::test]
-    async fn test_token_manager_creation() {
-        let manager = TokenManager::new(Some("test_tokens.json".to_string()));
-        assert_eq!(manager.cache_file, "test_tokens.json");
-    }
 
     #[test]
     fn test_token_serialization() {
