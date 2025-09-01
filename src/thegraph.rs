@@ -1,6 +1,7 @@
 use anyhow::{anyhow, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
+use std::env;
 
 // Manual GraphQL query structure for Uniswap V2 pairs
 #[derive(Debug, Serialize, Deserialize)]
@@ -60,22 +61,22 @@ struct GraphQLRequest {
 
 pub struct TheGraphClient {
     client: reqwest::Client,
-    endpoint: String,
+    api_key: Option<String>,
+    base_url: String,
+    uniswap_v2_subgraph_id: String,
 }
 
 impl TheGraphClient {
     pub fn new() -> Self {
-        // Use a public endpoint that doesn't require API key
-        Self {
-            client: reqwest::Client::new(),
-            endpoint: "https://gateway.thegraph.com/api/subgraphs/id".to_string(),
-        }
-    }
+        let api_key = env::var("THEGRAPH_API_KEY").ok();
+        let base_url = env::var("THEGRAPH_BASE_URL").unwrap_or_else(|_| "https://gateway.thegraph.com/api".to_string());
+        let uniswap_v2_subgraph_id = env::var("UNISWAP_V2_SUBGRAPH_ID").unwrap_or_else(|_| "A3Np3RQbaBA6oKJgiwDJeo5T3zrYfGHPWFYayMwtNDum".to_string());
 
-    pub fn with_endpoint(endpoint: String) -> Self {
         Self {
             client: reqwest::Client::new(),
-            endpoint,
+            api_key,
+            base_url,
+            uniswap_v2_subgraph_id,
         }
     }
 
@@ -134,13 +135,18 @@ impl TheGraphClient {
         };
 
         let url = format!(
-            "{}/A3Np3RQbaBA6oKJgiwDJeo5T3zrYfGHPWFYayMwtNDum",
-            self.endpoint
+            "{}/subgraphs/id/{}",
+            self.base_url, self.uniswap_v2_subgraph_id
         );
-        let response = self
-            .client
-            .post(&url)
-            .json(&request)
+        
+        let mut request_builder = self.client.post(&url).json(&request);
+        
+        // Add Bearer token if available
+        if let Some(ref api_key) = self.api_key {
+            request_builder = request_builder.header("Authorization", format!("Bearer {}", api_key));
+        }
+        
+        let response = request_builder
             .send()
             .await?
             .json::<GraphQLResponse>()
@@ -219,13 +225,18 @@ impl TheGraphClient {
         };
 
         let url = format!(
-            "{}/A3Np3RQbaBA6oKJgiwDJeo5T3zrYfGHPWFYayMwtNDum",
-            self.endpoint
+            "{}/{}",
+            self.base_url, self.uniswap_v2_subgraph_id
         );
-        let response = self
-            .client
-            .post(&url)
-            .json(&request)
+        
+        let mut request_builder = self.client.post(&url).json(&request);
+        
+        // Add Bearer token if available
+        if let Some(ref api_key) = self.api_key {
+            request_builder = request_builder.header("Authorization", format!("Bearer {}", api_key));
+        }
+        
+        let response = request_builder
             .send()
             .await?
             .json::<serde_json::Value>()

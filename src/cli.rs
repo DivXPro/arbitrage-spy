@@ -5,6 +5,7 @@ use log::{error, info};
 use crate::config::Config;
 use crate::database::Database;
 use crate::monitor::ArbitrageMonitor;
+use crate::pairs::PairManager;
 use crate::thegraph::TheGraphClient;
 use crate::token::TokenManager;
 
@@ -139,8 +140,9 @@ impl CliApp {
             Ok(pairs) => {
                 info!("成功获取到 {} 个 Uniswap V2 交易对", pairs.len());
                 
-                // 保存交易对到数据库
-                if let Err(e) = self.database.save_pairs(&pairs) {
+                // 使用 PairManager 保存交易对到数据库
+                let pair_manager = PairManager::new(&self.database);
+                if let Err(e) = pair_manager.save_pairs(&pairs) {
                     error!("保存交易对到数据库失败: {}", e);
                 } else {
                     info!("交易对数据已保存到数据库");
