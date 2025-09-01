@@ -6,6 +6,10 @@ use std::collections::HashSet;
 #[derive(Debug, Serialize, Deserialize)]
 pub struct PairData {
     pub id: String,
+    #[serde(default = "default_network")]
+    pub network: String,
+    #[serde(default = "default_dex_type")]
+    pub dex_type: String,
     pub token0: TokenInfo,
     pub token1: TokenInfo,
     #[serde(rename = "volumeUSD")]
@@ -14,6 +18,14 @@ pub struct PairData {
     pub reserve_usd: String,
     #[serde(rename = "txCount")]
     pub tx_count: String,
+}
+
+fn default_network() -> String {
+    "ethereum".to_string()
+}
+
+fn default_dex_type() -> String {
+    "uniswap_v2".to_string()
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -236,6 +248,8 @@ impl TheGraphClient {
         let demo_pairs = vec![
             PairData {
                 id: "0xa478c2975ab1ea89e8196811f51a7b7ade33eb11".to_string(),
+                network: "ethereum".to_string(),
+                dex_type: "uniswap_v2".to_string(),
                 token0: TokenInfo {
                     id: "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2".to_string(),
                     symbol: "WETH".to_string(),
@@ -254,6 +268,8 @@ impl TheGraphClient {
             },
             PairData {
                 id: "0xb4e16d0168e52d35cacd2c6185b44281ec28c9dc".to_string(),
+                network: "ethereum".to_string(),
+                dex_type: "uniswap_v2".to_string(),
                 token0: TokenInfo {
                     id: "0xa0b86a33e6180d93c6e6b3d3d4dae2c6b5b8b8b8".to_string(),
                     symbol: "WETH".to_string(),
@@ -272,6 +288,8 @@ impl TheGraphClient {
             },
             PairData {
                 id: "0xd3d2e2692501a5c9ca623199d38826e513033a17".to_string(),
+                network: "ethereum".to_string(),
+                dex_type: "uniswap_v2".to_string(),
                 token0: TokenInfo {
                     id: "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2".to_string(),
                     symbol: "WETH".to_string(),
@@ -325,6 +343,8 @@ mod tests {
         let test_pairs = vec![
             PairData {
                 id: "0x1".to_string(),
+                network: "ethereum".to_string(),
+                dex_type: "uniswap_v2".to_string(),
                 token0: TokenInfo {
                     id: "0xa".to_string(),
                     symbol: "WETH".to_string(),
@@ -343,6 +363,8 @@ mod tests {
             },
             PairData {
                 id: "0x2".to_string(),
+                network: "ethereum".to_string(),
+                dex_type: "uniswap_v2".to_string(),
                 token0: TokenInfo {
                     id: "0xc".to_string(),
                     symbol: "WETH".to_string(),

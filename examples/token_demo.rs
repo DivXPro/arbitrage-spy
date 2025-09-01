@@ -4,6 +4,7 @@
 
 use anyhow::Result;
 use arbitrage_spy::token::TokenManager;
+use arbitrage_spy::database::Database;
 use log::info;
 
 #[tokio::main]
@@ -13,8 +14,9 @@ async fn main() -> Result<()> {
     
     info!("Token管理器演示程序启动");
     
-    // 创建token管理器
-    let token_manager = TokenManager::new(Some("demo_tokens.json".to_string()));
+    // 创建数据库和token管理器
+    let database = Database::new(Some("demo_tokens.db"))?;
+    let token_manager = TokenManager::new(&database);
     
     // 获取token列表（使用缓存数据以避免API限制）
     info!("正在获取token列表...");

@@ -2,10 +2,13 @@
 //! 
 //! 这个库提供了监控多个DEX平台套利机会的功能，支持从区块链直接获取价格数据。
 
+pub mod cli;
 pub mod config;
 pub mod database;
 pub mod dex;
 pub mod monitor;
+pub mod pairs;
+pub mod thegraph;
 pub mod token;
 pub mod types;
 pub mod utils;
@@ -14,5 +17,6 @@ pub mod utils;
 pub use config::Config;
 pub use database::Database;
 pub use monitor::ArbitrageMonitor;
+pub use pairs::PairManager;
 pub use token::{Token, TokenList, TokenManager};
 pub use types::{ArbitrageOpportunity, Pool, Token as TypesToken, TokenPair};

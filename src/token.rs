@@ -4,7 +4,6 @@ use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use tokio::time::{sleep, Duration};
-use rusqlite::{Connection};
 
 /// Token information from CoinGecko API
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -55,19 +54,19 @@ pub struct TokenManager {
     client: Client,
     api_base_url: String,
     api_key: Option<String>,
-    db_path: Option<String>,
+    database: crate::database::Database,
 }
 
 impl TokenManager {
     /// Create a new TokenManager instance
-    pub fn new(db_path: Option<String>) -> Self {
+    pub fn new(database: &crate::database::Database) -> Self {
         let api_key = std::env::var("COINGECKO_API_KEY").ok();
 
         Self {
             client: Client::new(),
             api_base_url: "https://api.coingecko.com/api/v3".to_string(),
             api_key,
-            db_path,
+            database: database.clone(),
         }
     }
 
@@ -220,94 +219,55 @@ impl TokenManager {
 
     /// Get token list from database
     pub async fn get_tokens(&self, limit: Option<usize>) -> Result<TokenList> {
-        // Require database path to be configured
-        let db_path = self.db_path.as_ref()
-            .ok_or_else(|| anyhow::anyhow!("Database path not configured. Use new_with_db() to initialize TokenManager with database support."))?;
+        // Load tokens from database using the provided Database instance
+        let tokens = self.database.load_tokens(limit)?;
         
-        // Load from database
-        match self.load_from_database(db_path, limit) {
-            Ok(token_list) => {
-                log::info!("Loaded {} tokens from database", token_list.tokens.len());
-                return Ok(token_list);
-            }
-            Err(e) => {
-                return Err(anyhow::anyhow!("Failed to load tokens from database: {}", e));
-            }
-        }
-    }
-
-    /// Load token list from database
-    fn load_from_database(&self, db_path: &str, limit: Option<usize>) -> Result<TokenList> {
-        let conn = Connection::open(db_path)?;
-        
-        let (query, params_vec): (&str, Vec<rusqlite::types::Value>) = if let Some(limit_val) = limit {
-            (
-                "SELECT id, symbol, name, market_cap_rank, current_price, market_cap, total_volume, price_change_percentage_24h, platforms FROM tokens ORDER BY market_cap_rank ASC LIMIT ?1",
-                vec![rusqlite::types::Value::Integer(limit_val as i64)]
-            )
-        } else {
-            (
-                "SELECT id, symbol, name, market_cap_rank, current_price, market_cap, total_volume, price_change_percentage_24h, platforms FROM tokens ORDER BY market_cap_rank ASC",
-                vec![]
-            )
+        let token_list = TokenList {
+            tokens,
+            last_updated: chrono::Utc::now(),
+            total_count: self.database.load_tokens(None)?.len(),
         };
         
-        let mut stmt = conn.prepare(query)?;
-        let rows = stmt.query_map(rusqlite::params_from_iter(params_vec), |row| {
-            let platforms_json: String = row.get(8)?;
-            let platforms: HashMap<String, Option<String>> = 
-                serde_json::from_str(&platforms_json).unwrap_or_default();
-            
-            Ok(Token {
-                id: row.get(0)?,
-                symbol: row.get(1)?,
-                name: row.get(2)?,
-                platforms,
-                market_cap_rank: row.get(3)?,
-                current_price: row.get(4)?,
-                market_cap: row.get(5)?,
-                total_volume: row.get(6)?,
-                price_change_percentage_24h: row.get(7)?,
-            })
-        })?;
-        
-        let mut tokens = Vec::new();
-        for token_result in rows {
-            tokens.push(token_result?);
-        }
-        
-        let total_count = tokens.len();
-        
-        Ok(TokenList {
-            tokens,
-            last_updated: Utc::now(),
-            total_count,
-        })
+        log::info!("Loaded {} tokens from database", token_list.tokens.len());
+        Ok(token_list)
     }
 
-    /// Get token by symbol
-    pub async fn get_token_by_symbol(&self, symbol: &str) -> Result<Option<Token>> {
-        let token_list = self.get_tokens(None).await?;
-        Ok(token_list
-            .tokens
-            .into_iter()
-            .find(|t| t.symbol.to_lowercase() == symbol.to_lowercase()))
+    /// 根据地址查找token
+    pub async fn find_token_by_address(&self, address: &str) -> Result<Option<Token>> {
+        self.database.find_token_by_address(address)
     }
 
-    /// Get token by contract address
-    pub async fn get_token_by_address(&self, address: &str) -> Result<Option<Token>> {
-        let token_list = self.get_tokens(None).await?;
-        Ok(token_list.tokens.into_iter().find(|t| {
-            t.platforms
-                .values()
-                .any(|addr| addr.as_ref().map(|a| a.to_lowercase()) == Some(address.to_lowercase()))
-        }))
+    /// 获取token统计信息
+    pub fn get_token_stats(&self) -> Result<(usize, chrono::DateTime<chrono::Utc>)> {
+        self.database.get_token_stats()
     }
 
-    /// Get top tokens by market cap
+    /// 获取热门token
     pub async fn get_top_tokens(&self, limit: usize) -> Result<Vec<Token>> {
-        let token_list = self.get_tokens(None).await?;
-        Ok(token_list.tokens.into_iter().take(limit).collect())
+        self.database.load_tokens(Some(limit))
+    }
+
+
+
+    /// Get token by symbol (业务方法)
+    pub async fn get_token_by_symbol(&self, symbol: &str) -> Result<Option<Token>> {
+        self.database.find_token_by_symbol(symbol)
+    }
+
+    /// 保存token记录到数据库
+    pub async fn save_tokens(&self, tokens: &[Token]) -> Result<()> {
+        log::info!("保存 {} 个token到数据库...", tokens.len());
+        
+        // 调用数据库层的保存方法
+        self.database.save_tokens(tokens)?;
+        
+        log::info!("成功保存 {} 个token到数据库", tokens.len());
+        Ok(())
+    }
+
+    /// 保存单个token记录到数据库
+    pub async fn save_token(&self, token: &Token) -> Result<()> {
+        self.save_tokens(&[token.clone()]).await
     }
 }
 
