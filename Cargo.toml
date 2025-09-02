@@ -57,9 +57,11 @@ tokio-tungstenite = { version = "0.20", features = ["native-tls"] }
 # Terminal control and cursor manipulation
 crossterm = "0.27"
 # Terminal UI library for better table display
-ratatui = "0.26"
+ratatui = "0.29"
 # Futures utilities for WebSocket
 futures-util = "0.3"
+# TUI Logger for ratatui integration
+tui-logger = "0.17"
 
 [dev-dependencies]
 tokio-test = "0.4"

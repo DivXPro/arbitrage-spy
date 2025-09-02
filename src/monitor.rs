@@ -71,25 +71,36 @@ impl ArbitrageMonitor {
     }
 
     pub async fn start_scan(&mut self) {
+        info!("🚀 开始扫描套利机会...");
+        info!("📊 监控配置: 扫描间隔 10s");
+        
         // 启动监控循环
         let mut interval = time::interval(Duration::from_secs(10));
+        let mut scan_count = 0;
 
         loop {
             interval.tick().await;
+            scan_count += 1;
+            info!("🔍 第 {} 次扫描开始", scan_count);
 
             match self.scan_opportunities().await {
                 Ok(opportunities) => {
                     if !opportunities.is_empty() {
-                        info!("发现 {} 个套利机会", opportunities.len());
-                        for opportunity in opportunities {
-                            info!("套利机会: {:?}", opportunity);
+                        info!("✅ 发现 {} 个套利机会", opportunities.len());
+                        for (i, opportunity) in opportunities.iter().enumerate() {
+                            info!("💰 机会 {}: {} -> {} (利润: {:.2}%)", 
+                                i + 1, opportunity.buy_dex, opportunity.sell_dex, opportunity.profit_percentage);
                         }
+                    } else {
+                        warn!("⚠️  未发现套利机会");
                     }
                 }
                 Err(e) => {
-                    error!("扫描套利机会时出错: {}", e);
+                    error!("❌ 扫描套利机会时出错: {}", e);
                 }
             }
+            
+            info!("⏰ 等待 10s 后进行下次扫描...");
         }
     }
 

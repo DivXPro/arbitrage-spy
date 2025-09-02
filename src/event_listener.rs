@@ -10,6 +10,7 @@ use ethers::{
 };
 use std::sync::Arc;
 use std::collections::HashMap;
+use std::env;
 
 use crate::database::Database;
 use crate::table_display::{DisplayMessage, PairDisplay};
@@ -111,13 +112,21 @@ impl EventListener {
     }
 
     async fn try_connect_to_ethereum() -> Option<Arc<Provider<ethers::providers::Ws>>> {
-        // 尝试多个WebSocket端点
-        let wss_urls = vec![
-            "wss://eth-mainnet.g.alchemy.com/v2/VOgKLbFkWm760hlVNXCHq9RDKtFWebaG",
-        ];
+        // 从环境变量读取WebSocket端点
+        let wss_urls = match env::var("WSS_URLS") {
+            Ok(urls_str) => {
+                urls_str.split(',').map(|s| s.trim().to_string()).collect::<Vec<String>>()
+            },
+            Err(_) => {
+                warn!("未找到环境变量 WSS_URLS，使用默认WebSocket端点");
+                vec![
+                    "wss://mainnet.infura.io/ws/v3/".to_string(),
+                ]
+            }
+        };
         
         for wss_url in wss_urls {
-            match Provider::<ethers::providers::Ws>::connect(wss_url).await {
+            match Provider::<ethers::providers::Ws>::connect(&wss_url).await {
                 Ok(provider) => {
                     // 测试连接
                     if let Ok(_) = provider.get_block_number().await {
@@ -126,7 +135,7 @@ impl EventListener {
                     }
                 }
                 Err(e) => {
-                    debug!("WebSocket连接失败 {}: {}", wss_url, e);
+                    info!("WebSocket连接失败 {}: {}", wss_url, e);
                 }
             }
         }
