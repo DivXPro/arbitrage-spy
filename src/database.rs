@@ -289,20 +289,23 @@ impl Database {
     /// 获取数据库统计信息
     pub fn get_stats(&self) -> Result<(usize, chrono::DateTime<chrono::Utc>)> {
         // 获取token数量
-        let binding = self.conn.borrow_mut();
-        let mut stmt = binding.prepare("SELECT COUNT(*) FROM tokens")?;
-        let count: i64 = stmt.query_row([], |row| row.get(0))?;
+        let count = {
+            let binding = self.conn.borrow_mut();
+            let mut stmt = binding.prepare("SELECT COUNT(*) FROM tokens")?;
+            stmt.query_row([], |row| row.get(0))?
+        };
 
         // 获取最后更新时间
-        let binding2 = self.conn.borrow_mut();
-        let mut update_stmt = binding2
-            .prepare("SELECT timestamp FROM token_updates ORDER BY timestamp DESC LIMIT 1")?;
+        let last_update = {
+            let binding = self.conn.borrow_mut();
+            let mut update_stmt = binding
+                .prepare("SELECT timestamp FROM token_updates ORDER BY timestamp DESC LIMIT 1")?;
+    
+            let timestamp: i64 = update_stmt.query_row([], |row| row.get(0))?;
+            chrono::DateTime::from_timestamp(timestamp, 0).unwrap_or_else(chrono::Utc::now)
+        };
 
-        let timestamp: i64 = update_stmt.query_row([], |row| row.get(0))?;
-        let last_update =
-            chrono::DateTime::from_timestamp(timestamp, 0).unwrap_or_else(chrono::Utc::now);
-
-        Ok((count as usize, last_update))
+        Ok((count, last_update))
     }
 
     /// 保存交易对列表到数据库 - 直接数据库操作
