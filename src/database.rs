@@ -4,12 +4,11 @@ use anyhow::Result;
 use log::info;
 use rusqlite::{params, Connection};
 use std::path::Path;
-use std::rc::Rc;
-use std::cell::RefCell;
+use std::sync::{Arc, Mutex};
 
 #[derive(Clone)]
 pub struct Database {
-    conn: Rc<RefCell<Connection>>,
+    conn: Arc<Mutex<Connection>>,
 }
 
 impl Database {
@@ -31,7 +30,7 @@ impl Database {
             }
         };
 
-        let db = Database { conn: Rc::new(RefCell::new(conn)) };
+        let db = Database { conn: Arc::new(Mutex::new(conn)) };
         db.init_tables()?;
         Ok(db)
     }
@@ -39,7 +38,7 @@ impl Database {
     /// 初始化数据库表
     fn init_tables(&self) -> Result<()> {
         // 创建tokens表
-        self.conn.borrow_mut().execute(
+        self.conn.lock().unwrap().execute(
             r#"
             CREATE TABLE IF NOT EXISTS tokens (
                 id TEXT PRIMARY KEY,
@@ -60,7 +59,7 @@ impl Database {
         )?;
 
         // 创建token_updates表用于记录更新历史
-        self.conn.borrow_mut().execute(
+        self.conn.lock().unwrap().execute(
             r#"
             CREATE TABLE IF NOT EXISTS token_updates (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -72,7 +71,7 @@ impl Database {
         )?;
 
         // 创建pairs表用于存储交易对数据
-        self.conn.borrow_mut().execute(
+        self.conn.lock().unwrap().execute(
             r#"
             CREATE TABLE IF NOT EXISTS pairs (
                 id TEXT PRIMARY KEY,
@@ -104,7 +103,7 @@ impl Database {
     pub fn save_tokens(&self, tokens: &[Token]) -> Result<()> {
         let tokens_len = tokens.len();
         // 开始事务
-        let binding = self.conn.borrow_mut();
+        let binding = self.conn.lock().unwrap();
         let tx = binding.unchecked_transaction()?;
 
         // 插入或更新tokens
@@ -165,7 +164,7 @@ impl Database {
             )
         };
         
-        let binding = self.conn.borrow_mut();
+        let binding = self.conn.lock().unwrap();
         let mut stmt = binding.prepare(query)?;
         let rows = stmt.query_map(rusqlite::params_from_iter(params_vec), |row| {
             let platforms_json: String = row.get(8)?;
@@ -195,7 +194,7 @@ impl Database {
 
     /// 根据符号查找token
     pub fn find_token_by_symbol(&self, symbol: &str) -> Result<Option<Token>> {
-        let binding = self.conn.borrow_mut();
+        let binding = self.conn.lock().unwrap();
         let mut stmt = binding.prepare(
             r#"
             SELECT id, symbol, name, market_cap_rank, current_price,
@@ -232,7 +231,7 @@ impl Database {
 
     /// 根据地址查找token - 直接数据库操作
     pub fn find_token_by_address(&self, address: &str) -> Result<Option<Token>> {
-        let binding = self.conn.borrow_mut();
+        let binding = self.conn.lock().unwrap();
         let mut stmt = binding.prepare(
             r#"
             SELECT id, symbol, name, market_cap_rank, current_price,
@@ -270,12 +269,12 @@ impl Database {
     /// 获取token统计信息 - 直接数据库操作
     pub fn get_token_stats(&self) -> Result<(usize, chrono::DateTime<chrono::Utc>)> {
         // 获取token数量
-        let binding = self.conn.borrow_mut();
+        let binding = self.conn.lock().unwrap();
         let mut stmt = binding.prepare("SELECT COUNT(*) FROM tokens")?;
         let count: i64 = stmt.query_row([], |row| row.get(0))?;
 
         // 获取最后更新时间
-        let binding2 = self.conn.borrow_mut();
+        let binding2 = self.conn.lock().unwrap();
         let mut update_stmt = binding2
             .prepare("SELECT timestamp FROM token_updates ORDER BY timestamp DESC LIMIT 1")?;
 
@@ -290,14 +289,14 @@ impl Database {
     pub fn get_stats(&self) -> Result<(usize, chrono::DateTime<chrono::Utc>)> {
         // 获取token数量
         let count = {
-            let binding = self.conn.borrow_mut();
+            let binding = self.conn.lock().unwrap();
             let mut stmt = binding.prepare("SELECT COUNT(*) FROM tokens")?;
             stmt.query_row([], |row| row.get(0))?
         };
 
         // 获取最后更新时间
         let last_update = {
-            let binding = self.conn.borrow_mut();
+            let binding = self.conn.lock().unwrap();
             let mut update_stmt = binding
                 .prepare("SELECT timestamp FROM token_updates ORDER BY timestamp DESC LIMIT 1")?;
     
@@ -312,7 +311,7 @@ impl Database {
     pub fn save_pairs(&self, pairs: &[PairData]) -> Result<()> {
         let pairs_len = pairs.len();
         // 开始事务
-        let binding = self.conn.borrow_mut();
+        let binding = self.conn.lock().unwrap();
         let tx = binding.unchecked_transaction()?;
 
         // 插入或更新pairs
@@ -357,7 +356,7 @@ impl Database {
     pub fn load_pairs(&self) -> Result<Vec<PairData>> {
         use crate::thegraph::TokenInfo;
         
-        let binding = self.conn.borrow_mut();
+        let binding = self.conn.lock().unwrap();
         let mut stmt = binding.prepare(
             r#"
             SELECT id, network, dex_type, token0_id, token0_symbol, token0_name, token0_decimals,
@@ -438,7 +437,7 @@ impl Database {
             query.push_str(&format!(" LIMIT {}", lim));
         }
 
-        let binding = self.conn.borrow_mut();
+        let binding = self.conn.lock().unwrap();
         let mut stmt = binding.prepare(&query)?;
         let params: Vec<&dyn rusqlite::ToSql> = params_vec.iter().map(|p| p as &dyn rusqlite::ToSql).collect();
         
@@ -477,7 +476,7 @@ impl Database {
     pub fn find_pair_by_id(&self, pair_id: &str) -> Result<Option<PairData>> {
         use crate::thegraph::TokenInfo;
         
-        let binding = self.conn.borrow_mut();
+        let binding = self.conn.lock().unwrap();
         let mut stmt = binding.prepare(
             r#"
             SELECT id, network, dex_type, token0_id, token0_symbol, token0_name, token0_decimals,
@@ -519,7 +518,7 @@ impl Database {
 
     /// 获取交易对统计信息 - 直接数据库操作
     pub fn get_pairs_stats(&self) -> Result<(usize, f64, f64)> {
-        let binding = self.conn.borrow_mut();
+        let binding = self.conn.lock().unwrap();
         let mut stmt = binding.prepare(
             r#"
             SELECT COUNT(*) as count,
@@ -541,6 +540,53 @@ impl Database {
             Some(row) => Ok(row?),
             None => Ok((0, 0.0, 0.0)),
         }
+    }
+
+    /// 获取前N个交易对，按流动性排序
+    pub fn get_top_pairs(&self, limit: usize) -> Result<Vec<PairData>> {
+        use crate::thegraph::TokenInfo;
+        
+        let query = r#"
+            SELECT id, network, dex_type, token0_id, token0_symbol, token0_name, token0_decimals,
+                   token1_id, token1_symbol, token1_name, token1_decimals,
+                   volume_usd, reserve_usd, tx_count
+            FROM pairs
+            ORDER BY CAST(reserve_usd AS REAL) DESC
+            LIMIT ?
+        "#;
+
+        let binding = self.conn.lock().unwrap();
+        let mut stmt = binding.prepare(query)?;
+        
+        let pair_iter = stmt.query_map([limit], |row| {
+            Ok(PairData {
+                id: row.get(0)?,
+                network: row.get(1)?,
+                dex_type: row.get(2)?,
+                token0: TokenInfo {
+                    id: row.get(3)?,
+                    symbol: row.get(4)?,
+                    name: row.get(5)?,
+                    decimals: row.get(6)?,
+                },
+                token1: TokenInfo {
+                    id: row.get(7)?,
+                    symbol: row.get(8)?,
+                    name: row.get(9)?,
+                    decimals: row.get(10)?,
+                },
+                volume_usd: row.get(11)?,
+                reserve_usd: row.get(12)?,
+                tx_count: row.get(13)?,
+            })
+        })?;
+
+        let mut pairs = Vec::new();
+        for pair in pair_iter {
+            pairs.push(pair?);
+        }
+
+        Ok(pairs)
     }
 
 }

@@ -6,11 +6,13 @@ use crate::config::Config;
 use crate::database::Database;
 use crate::monitor::ArbitrageMonitor;
 use crate::pairs::PairManager;
+use crate::realtime_monitor::RealTimeMonitor;
 use crate::thegraph::TheGraphClient;
 use crate::token::TokenManager;
 
 // 命令行参数常量
 const UPDATE_TOKENS_ARG: &str = "update";
+const MONITOR_ARG: &str = "monitor";
 
 /// CLI应用程序结构
 pub struct CliApp {
@@ -44,6 +46,32 @@ impl CliApp {
                     .help("更新 token 数据")
                     .action(clap::ArgAction::SetTrue),
             )
+            .arg(
+                Arg::new(MONITOR_ARG)
+                    .long(MONITOR_ARG)
+                    .short('m')
+                    .help("启动实时监控模式")
+                    .action(clap::ArgAction::SetTrue),
+            )
+            .arg(
+                Arg::new("count")
+                    .long("count")
+                    .short('c')
+                    .help("显示的交易对数量 (默认: 10)")
+                    .value_name("NUMBER")
+                    .default_value("10")
+                    .requires(MONITOR_ARG),
+            )
+            .arg(
+                Arg::new("interval")
+                    .long("interval")
+                    .short('i')
+                    .help("更新间隔秒数 (默认: 1)")
+                    .value_name("SECONDS")
+                    .default_value("1")
+                    .requires(MONITOR_ARG),
+            )
+
     }
 
     /// 运行CLI应用程序
@@ -56,12 +84,45 @@ impl CliApp {
             return Ok(());
         }
 
+        // 检查是否启动实时监控模式
+        if matches.get_flag(MONITOR_ARG) {
+            let count: usize = matches.get_one::<String>("count")
+                .unwrap()
+                .parse()
+                .unwrap_or(10);
+            let interval: u64 = matches.get_one::<String>("interval")
+                .unwrap()
+                .parse()
+                .unwrap_or(1);
+            
+            info!("启动实时监控模式...");
+            self.start_realtime_monitor(count, interval).await?;
+            return Ok(());
+        }
+
+
+
         // 正常启动模式 - 初始化完整的监控系统
         info!("启动完整监控系统...");
         self.start_monitoring().await?;
 
         Ok(())
     }
+
+    /// 启动实时监控模式
+    async fn start_realtime_monitor(&self, count: usize, interval: u64) -> Result<()> {
+        println!("正在启动实时监控...");
+        
+        // 创建实时监控器
+        let monitor = RealTimeMonitor::new(self.config.clone(), self.database.clone()).await?;
+        
+        // 开始监控
+        monitor.start_monitoring(count, interval).await?;
+        
+        Ok(())
+    }
+
+
 
     /// 启动完整的监控系统
     async fn start_monitoring(&self) -> Result<()> {

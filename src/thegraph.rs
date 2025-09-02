@@ -4,7 +4,7 @@ use std::collections::HashSet;
 use std::env;
 
 // Manual GraphQL query structure for Uniswap V2 pairs
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PairData {
     pub id: String,
     #[serde(default = "default_network")]
@@ -29,7 +29,7 @@ fn default_dex_type() -> String {
     "uniswap_v2".to_string()
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TokenInfo {
     pub id: String,
     pub symbol: String,
@@ -101,8 +101,7 @@ impl TheGraphClient {
                     orderBy: volumeUSD,
                     orderDirection: desc,
                     where: {
-                        volumeUSD_gt: "1000000",
-                        reserveUSD_gt: "100000"
+                        reserveUSD_gt: "10000"
                     }
                 ) {
                     id
