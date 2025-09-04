@@ -13,7 +13,9 @@ use std::collections::HashMap;
 use std::env;
 
 use crate::database::Database;
+// use super::price_calculator::PriceCalculator;
 use crate::table_display::{DisplayMessage, PairDisplay};
+use crate::thegraph::PairData;
 
 
 #[derive(Debug, Clone)]
@@ -54,16 +56,30 @@ impl EventListener {
         sender: mpsc::Sender<DisplayMessage>,
         count: usize,
         interval: Duration,
+        initial_pairs: Vec<PairData>,
     ) -> Self {
         // 尝试连接到以太坊节点
         let provider = Self::try_connect_to_ethereum().await;
+        
+        // 从初始交易对数据中提取合约地址
+        let mut contracts = HashMap::new();
+        for pair in &initial_pairs {
+            let pair_name = format!("{}-{}", pair.token0.symbol, pair.token1.symbol);
+            if let Ok(address) = pair.id.parse::<H160>() {
+                info!("已添加交易对合约监听: {} -> {}", pair_name, pair.id);
+                contracts.insert(pair_name, address);
+            } else {
+                warn!("无效的交易对地址: {}", pair.id);
+            }
+        }
+        
         let event_listener = Self {
             database,
             sender,
             count,
             interval,
             provider,
-            contracts: HashMap::new(),
+            contracts,
         };
         
         event_listener
@@ -216,6 +232,15 @@ impl EventListener {
              match Self::fetch_and_process_data_static(&database, count).await {
                  Ok(pairs) => {
                      if !pairs.is_empty() {
+                         info!("Swap事件触发数据更新，共 {} 个交易对:", pairs.len());
+                         for (i, pair) in pairs.iter().enumerate().take(5) {
+                             info!("  {}. {} ({}) - 价格: {} - 流动性: {}", 
+                                 i + 1, pair.pair, pair.dex, pair.price, pair.liquidity);
+                         }
+                         if pairs.len() > 5 {
+                             info!("  ... 还有 {} 个交易对", pairs.len() - 5);
+                         }
+                         
                          if let Err(e) = sender.send(DisplayMessage::UpdateData(pairs)).await {
                              error!("发送Swap事件更新失败: {}", e);
                              break;
@@ -287,15 +312,11 @@ impl EventListener {
             .into_iter()
             .enumerate()
             .map(|(index, pair)| {
-                // 模拟价格变化数据
-                let change_24h = format!("+{:.2}%", (index as f64 * 0.5) % 10.0);
-                
                 PairDisplay {
                     rank: index + 1,
                     pair: format!("{}/{}", pair.token0.symbol, pair.token1.symbol),
                     dex: pair.dex_type.clone(),
-                    price: "$0.000000".to_string(), // 模拟价格
-                    change_24h,
+                    price: "$0.000000".to_string(),
                     liquidity: format!("${:.0}", pair.reserve_usd.parse::<f64>().unwrap_or(0.0)),
                     last_update: chrono::Utc::now().format("%H:%M:%S").to_string(),
                 }
@@ -321,8 +342,7 @@ impl EventListener {
                     rank: index + 1,
                     pair: format!("{}/{}", pair.token0.symbol, pair.token1.symbol),
                     dex: pair.dex_type.clone(),
-                    price: "$0.000000".to_string(), // 模拟价格
-                    change_24h,
+                    price: "$0.000000".to_string(),
                     liquidity: format!("${:.0}", pair.reserve_usd.parse::<f64>().unwrap_or(0.0)),
                     last_update: chrono::Utc::now().format("%H:%M:%S").to_string(),
                 }

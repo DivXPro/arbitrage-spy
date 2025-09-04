@@ -245,6 +245,8 @@ mod tests {
             volume_usd: "1000000".to_string(),
             reserve_usd: "5000000".to_string(),
             tx_count: "1000".to_string(),
+            reserve0: "1000000".to_string(),
+            reserve1: "5000000".to_string(),
         }
     }
 }

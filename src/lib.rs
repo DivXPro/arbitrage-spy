@@ -9,6 +9,7 @@ pub mod dex;
 pub mod event_listener;
 pub mod monitor;
 pub mod pairs;
+pub mod price_calculator;
 pub mod realtime_monitor;
 pub mod table_display;
 pub mod thegraph;

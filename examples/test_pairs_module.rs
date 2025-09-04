@@ -49,6 +49,8 @@ async fn main() -> Result<()> {
                     volume_usd: "1000000".to_string(),
                     reserve_usd: "5000000".to_string(),
                     tx_count: "1000".to_string(),
+                    reserve0: "1000000".to_string(),
+                    reserve1: "5000000".to_string(),
                 },
                 PairData {
                     id: "demo_pair_2".to_string(),
@@ -69,6 +71,8 @@ async fn main() -> Result<()> {
                     volume_usd: "800000".to_string(),
                     reserve_usd: "3000000".to_string(),
                     tx_count: "800".to_string(),
+                    reserve0: "1000000".to_string(),
+                    reserve1: "5000000".to_string(),
                 },
             ]
         }
@@ -126,6 +130,8 @@ async fn main() -> Result<()> {
             volume_usd: "500000".to_string(),
             reserve_usd: "2000000".to_string(),
             tx_count: "500".to_string(),
+            reserve0: "1000000".to_string(),
+            reserve1: "5000000".to_string(),
         },
     ];
 

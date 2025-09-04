@@ -19,6 +19,10 @@ pub struct PairData {
     pub reserve_usd: String,
     #[serde(rename = "txCount")]
     pub tx_count: String,
+    #[serde(rename = "reserve0")]
+    pub reserve0: String,
+    #[serde(rename = "reserve1")]
+    pub reserve1: String,
 }
 
 fn default_network() -> String {
@@ -120,6 +124,8 @@ impl TheGraphClient {
                     volumeUSD
                     reserveUSD
                     txCount
+                    reserve0
+                    reserve1
                 }
             }
         "#;
@@ -210,6 +216,8 @@ impl TheGraphClient {
                     volumeUSD
                     reserveUSD
                     txCount
+                    reserve0
+                    reserve1
                 }
             }
         "#;
@@ -275,6 +283,8 @@ impl TheGraphClient {
                 volume_usd: "50000000".to_string(),
                 reserve_usd: "200000000".to_string(),
                 tx_count: "5000".to_string(),
+                reserve0: "50000000000000000000000".to_string(), // 50,000 WETH
+                reserve1: "100000000000".to_string(), // 100,000 USDT
             },
             PairData {
                 id: "0xb4e16d0168e52d35cacd2c6185b44281ec28c9dc".to_string(),
@@ -295,6 +305,8 @@ impl TheGraphClient {
                 volume_usd: "30000000".to_string(),
                 reserve_usd: "150000000".to_string(),
                 tx_count: "3000".to_string(),
+                reserve0: "30000000000000000000000".to_string(), // 30,000 WETH
+                reserve1: "1500000000000000000000000".to_string(), // 1,500,000 UNI
             },
             PairData {
                 id: "0xd3d2e2692501a5c9ca623199d38826e513033a17".to_string(),
@@ -315,6 +327,8 @@ impl TheGraphClient {
                 volume_usd: "25000000".to_string(),
                 reserve_usd: "120000000".to_string(),
                 tx_count: "2500".to_string(),
+                reserve0: "25000000000000000000000".to_string(), // 25,000 WETH
+                reserve1: "2000000000000000000000000".to_string(), // 2,000,000 LINK
             },
         ];
 
@@ -370,6 +384,8 @@ mod tests {
                 volume_usd: "1000000".to_string(),
                 reserve_usd: "5000000".to_string(),
                 tx_count: "1000".to_string(),
+                reserve0: "1000000000000000000000".to_string(),
+                reserve1: "2000000000".to_string(),
             },
             PairData {
                 id: "0x2".to_string(),
@@ -390,6 +406,8 @@ mod tests {
                 volume_usd: "800000".to_string(),
                 reserve_usd: "4000000".to_string(),
                 tx_count: "800".to_string(),
+                reserve0: "800000000000000000000".to_string(),
+                reserve1: "1000000000000000000000000".to_string(),
             },
         ];
 

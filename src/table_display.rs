@@ -8,13 +8,14 @@ use ratatui::{
     backend::CrosstermBackend,
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
-    widgets::{Block, Borders, Cell, Paragraph, Row, Table, Widget},
+    widgets::{Block, Borders, Cell, Paragraph, Row, Table},
     Frame, Terminal,
 };
 use tui_logger::{TuiLoggerWidget, TuiLoggerLevelOutput};
 use std::io::{self, Stdout};
 use std::time::Duration;
 use tokio::sync::mpsc;
+use log::info;
 
 #[derive(Clone, Debug)]
 pub struct PairDisplay {
@@ -22,7 +23,6 @@ pub struct PairDisplay {
     pub pair: String,
     pub dex: String,
     pub price: String,
-    pub change_24h: String,
     pub liquidity: String,
     pub last_update: String,
 }
@@ -38,29 +38,46 @@ pub struct TableDisplay {
     receiver: mpsc::Receiver<DisplayMessage>,
     show_logs: bool,
     tui_logger_state: tui_logger::TuiWidgetState,
+    initial_data: Vec<PairDisplay>,
 }
 
 impl TableDisplay {
-    pub fn new(receiver: mpsc::Receiver<DisplayMessage>) -> Result<Self> {
+    pub fn new(receiver: mpsc::Receiver<DisplayMessage>, initial_data: Vec<PairDisplay>) -> Result<Self> {
         let backend = CrosstermBackend::new(io::stdout());
         let terminal = Terminal::new(backend)?;
+        
+        info!("📊 接收到 {} 个初始交易对数据", initial_data.len());
+        
         Ok(Self {
             terminal,
             receiver,
             show_logs: true,
             tui_logger_state: tui_logger::TuiWidgetState::new(),
+            initial_data,
         })
     }
+    
+
     
     pub async fn start_display(&mut self) -> Result<()> {
         // 启用原始模式并进入备用屏幕
         terminal::enable_raw_mode()?;
         execute!(io::stdout(), EnterAlternateScreen)?;
         
-        let mut current_pairs = Vec::new();
+        // 使用初始数据作为当前显示的数据
+        let mut current_pairs = self.initial_data.clone();
         
-        // 显示初始空表格
-        self.terminal.draw(|f| Self::render_ui_static(f, &current_pairs))?;
+        // 显示初始数据
+        self.terminal.draw(|f| {
+            if self.show_logs {
+                Self::render_ui_with_logs(f, &current_pairs, &mut self.tui_logger_state);
+            } else {
+                Self::render_ui_static(f, &current_pairs);
+            }
+        })?;
+        
+        info!("🚀 TableDisplay 已启动，显示 {} 个初始交易对", current_pairs.len());
+        println!("🚀 TableDisplay 已启动，显示 {} 个初始交易对", current_pairs.len());
         
         loop {
             tokio::select! {
@@ -186,7 +203,7 @@ impl TableDisplay {
         
         // 渲染表格
         if !pairs.is_empty() {
-            let header_cells = ["排名", "交易对", "DEX", "价格 (USD)", "24h变化", "流动性", "最后更新"]
+            let header_cells = ["排名", "交易对", "DEX", "价格 (USD)", "流动性", "最后更新"]
                 .iter()
                 .map(|h| Cell::from(*h).style(Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)));
             let header = Row::new(header_cells).height(1).bottom_margin(1);
@@ -197,13 +214,6 @@ impl TableDisplay {
                     Cell::from(pair.pair.clone()),
                     Cell::from(pair.dex.clone()),
                     Cell::from(pair.price.clone()),
-                    Cell::from(pair.change_24h.clone()).style(
-                        if pair.change_24h.starts_with('+') {
-                            Style::default().fg(Color::Green)
-                        } else {
-                            Style::default().fg(Color::Red)
-                        }
-                    ),
                     Cell::from(pair.liquidity.clone()),
                     Cell::from(pair.last_update.clone()),
                 ];
@@ -215,7 +225,6 @@ impl TableDisplay {
                 Constraint::Length(12), // 交易对
                 Constraint::Length(10), // DEX
                 Constraint::Length(12), // 价格
-                Constraint::Length(10), // 24h变化
                 Constraint::Length(12), // 流动性
                 Constraint::Length(12), // 最后更新
             ])
@@ -234,7 +243,7 @@ impl TableDisplay {
         
         // 渲染提示信息
         let help_text = if show_logs {
-            "按 Ctrl+C 退出 | 按 'l' 隐藏日志"
+            "按 Ctrl+C 退出 | 按 'l' 隐藏日志 | 方向键/鼠标滚轮滚动日志 | 'h'隐藏/显示级别 | '+'增加级别 | '-'减少级别"
         } else {
             "按 Ctrl+C 退出 | 按 'l' 显示日志"
         };
@@ -264,7 +273,7 @@ impl TableDisplay {
         
         // 渲染表格
         if !pairs.is_empty() {
-            let header_cells = ["排名", "交易对", "DEX", "价格 (USD)", "24h变化", "流动性", "最后更新"]
+            let header_cells = ["排名", "交易对", "DEX", "价格 (USD)", "流动性", "最后更新"]
                 .iter()
                 .map(|h| Cell::from(*h).style(Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)));
             let header = Row::new(header_cells).height(1).bottom_margin(1);
@@ -275,13 +284,6 @@ impl TableDisplay {
                     Cell::from(pair.pair.clone()),
                     Cell::from(pair.dex.clone()),
                     Cell::from(pair.price.clone()),
-                    Cell::from(pair.change_24h.clone()).style(
-                        if pair.change_24h.starts_with('+') {
-                            Style::default().fg(Color::Green)
-                        } else {
-                            Style::default().fg(Color::Red)
-                        }
-                    ),
                     Cell::from(pair.liquidity.clone()),
                     Cell::from(pair.last_update.clone()),
                 ];
@@ -293,7 +295,6 @@ impl TableDisplay {
                 Constraint::Length(12), // 交易对
                 Constraint::Length(12), // DEX
                 Constraint::Length(12), // 价格
-                Constraint::Length(8),  // 24h变化
                 Constraint::Length(10), // 流动性
                 Constraint::Length(10), // 最后更新
             ])

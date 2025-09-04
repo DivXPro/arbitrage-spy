@@ -8,6 +8,7 @@ mod dex;
 mod event_listener;
 mod monitor;
 mod pairs;
+mod price_calculator;
 mod realtime_monitor;
 mod table_display;
 mod thegraph;

@@ -1,0 +1,139 @@
+use anyhow::Result;
+use bigdecimal::{BigDecimal, FromPrimitive, Zero};
+use std::str::FromStr;
+use crate::thegraph::{PairData, TokenInfo};
+
+/// 价格计算工具
+pub struct PriceCalculator;
+
+impl PriceCalculator {
+    /// 从PairData计算token0/token1的价格
+    pub fn calculate_price_from_reserves(pair: &PairData) -> Result<BigDecimal> {
+        let reserve0 = BigDecimal::from_str(&pair.reserve0)
+            .map_err(|e| anyhow::anyhow!("Invalid reserve0: {}", e))?;
+        let reserve1 = BigDecimal::from_str(&pair.reserve1)
+            .map_err(|e| anyhow::anyhow!("Invalid reserve1: {}", e))?;
+        
+        if reserve0.is_zero() {
+            return Err(anyhow::anyhow!("Reserve0 is zero, cannot calculate price"));
+        }
+        
+        // 获取token的小数位数
+        let token0_decimals = pair.token0.decimals.parse::<u32>()
+            .map_err(|e| anyhow::anyhow!("Invalid token0 decimals: {}", e))?;
+        let token1_decimals = pair.token1.decimals.parse::<u32>()
+            .map_err(|e| anyhow::anyhow!("Invalid token1 decimals: {}", e))?;
+        
+        // 调整小数位数
+        let adjusted_reserve0 = Self::adjust_for_decimals(&reserve0, token0_decimals);
+        let adjusted_reserve1 = Self::adjust_for_decimals(&reserve1, token1_decimals);
+        
+        // 计算价格 (token1/token0)
+        let price = &adjusted_reserve1 / &adjusted_reserve0;
+        
+        Ok(price)
+    }
+    
+    /// 格式化价格为显示字符串
+    pub fn format_price(price: &BigDecimal) -> String {
+        format!("${:.6}", price)
+    }
+    
+    /// 调整BigDecimal的小数位数
+    fn adjust_for_decimals(value: &BigDecimal, decimals: u32) -> BigDecimal {
+        let divisor = BigDecimal::from_u64(10_u64.pow(decimals))
+            .unwrap_or_else(|| BigDecimal::from(1));
+        value / divisor
+    }
+    
+    /// 检查是否为有效的储备量数据
+    pub fn has_valid_reserves(pair: &PairData) -> bool {
+        if let (Ok(reserve0), Ok(reserve1)) = (
+            BigDecimal::from_str(&pair.reserve0),
+            BigDecimal::from_str(&pair.reserve1)
+        ) {
+            !reserve0.is_zero() && !reserve1.is_zero()
+        } else {
+            false
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::thegraph::TokenInfo;
+    
+    #[test]
+    fn test_calculate_price_from_reserves() {
+        let pair = PairData {
+            id: "test".to_string(),
+            network: "ethereum".to_string(),
+            dex_type: "uniswap_v2".to_string(),
+            token0: TokenInfo {
+                id: "token0".to_string(),
+                symbol: "WETH".to_string(),
+                name: "Wrapped Ether".to_string(),
+                decimals: "18".to_string(),
+            },
+            token1: TokenInfo {
+                id: "token1".to_string(),
+                symbol: "USDT".to_string(),
+                name: "Tether USD".to_string(),
+                decimals: "6".to_string(),
+            },
+            volume_usd: "1000000".to_string(),
+            reserve_usd: "5000000".to_string(),
+            tx_count: "1000".to_string(),
+            reserve0: "1000000000000000000000".to_string(), // 1000 WETH (18 decimals)
+            reserve1: "2000000000000".to_string(), // 2,000,000 USDT (6 decimals)
+        };
+        
+        let price = PriceCalculator::calculate_price_from_reserves(&pair).unwrap();
+        // 预期价格: 2,000,000 USDT / 1000 WETH = 2000 USDT per WETH
+        assert_eq!(price.to_string(), "2000");
+    }
+    
+    #[test]
+    fn test_format_price() {
+        let price = BigDecimal::from_str("2000.123456789").unwrap();
+        let formatted = PriceCalculator::format_price(&price);
+        assert_eq!(formatted, "$2000.123457");
+    }
+    
+    #[test]
+    fn test_has_valid_reserves() {
+        let valid_pair = PairData {
+            id: "test".to_string(),
+            network: "ethereum".to_string(),
+            dex_type: "uniswap_v2".to_string(),
+            token0: TokenInfo {
+                id: "token0".to_string(),
+                symbol: "WETH".to_string(),
+                name: "Wrapped Ether".to_string(),
+                decimals: "18".to_string(),
+            },
+            token1: TokenInfo {
+                id: "token1".to_string(),
+                symbol: "USDT".to_string(),
+                name: "Tether USD".to_string(),
+                decimals: "6".to_string(),
+            },
+            volume_usd: "1000000".to_string(),
+            reserve_usd: "5000000".to_string(),
+            tx_count: "1000".to_string(),
+            reserve0: "1000000000000000000000".to_string(),
+            reserve1: "2000000000000".to_string(),
+        };
+        
+        assert!(PriceCalculator::has_valid_reserves(&valid_pair));
+        
+        let invalid_pair = PairData {
+            reserve0: "0".to_string(),
+            reserve1: "1000".to_string(),
+            ..valid_pair
+        };
+        
+        assert!(!PriceCalculator::has_valid_reserves(&invalid_pair));
+    }
+}

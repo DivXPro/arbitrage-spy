@@ -88,12 +88,25 @@ impl Database {
                 volume_usd TEXT NOT NULL,
                 reserve_usd TEXT NOT NULL,
                 tx_count TEXT NOT NULL,
+                reserve0 TEXT NOT NULL DEFAULT '0',
+                reserve1 TEXT NOT NULL DEFAULT '0',
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
             )
             "#,
             [],
         )?;
+
+        // 添加新列（如果不存在）
+        let binding = self.conn.lock().unwrap();
+        let _ = binding.execute(
+            "ALTER TABLE pairs ADD COLUMN reserve0 TEXT NOT NULL DEFAULT '0'",
+            [],
+        );
+        let _ = binding.execute(
+            "ALTER TABLE pairs ADD COLUMN reserve1 TEXT NOT NULL DEFAULT '0'",
+            [],
+        );
 
         info!("数据库表初始化完成");
         Ok(())
@@ -319,10 +332,11 @@ impl Database {
             let mut stmt = tx.prepare(
                 r#"
                 INSERT OR REPLACE INTO pairs (
-                    id, network, dex_type, token0_id, token0_symbol, token0_name, token0_decimals,
-                    token1_id, token1_symbol, token1_name, token1_decimals,
-                    volume_usd, reserve_usd, tx_count
-                ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)
+                id, network, dex_type,
+                token0_id, token0_symbol, token0_name, token0_decimals,
+                token1_id, token1_symbol, token1_name, token1_decimals,
+                volume_usd, reserve_usd, tx_count, reserve0, reserve1
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16)
                 "#,
             )?;
 
@@ -340,8 +354,10 @@ impl Database {
                     &pair.token1.name,
                     &pair.token1.decimals,
                     &pair.volume_usd,
-                    &pair.reserve_usd,
-                    &pair.tx_count,
+                &pair.reserve_usd,
+                &pair.tx_count,
+                &pair.reserve0,
+                &pair.reserve1,
                  ])?;
             }
         }
@@ -361,7 +377,7 @@ impl Database {
             r#"
             SELECT id, network, dex_type, token0_id, token0_symbol, token0_name, token0_decimals,
                    token1_id, token1_symbol, token1_name, token1_decimals,
-                   volume_usd, reserve_usd, tx_count
+                   volume_usd, reserve_usd, tx_count, reserve0, reserve1
             FROM pairs
             "#,
         )?;
@@ -386,6 +402,8 @@ impl Database {
                 volume_usd: row.get(11)?,
                 reserve_usd: row.get(12)?,
                 tx_count: row.get(13)?,
+                reserve0: row.get(14)?,
+                reserve1: row.get(15)?,
             })
         })?;
 
@@ -410,7 +428,7 @@ impl Database {
             r#"
             SELECT id, network, dex_type, token0_id, token0_symbol, token0_name, token0_decimals,
                    token1_id, token1_symbol, token1_name, token1_decimals,
-                   volume_usd, reserve_usd, tx_count
+                   volume_usd, reserve_usd, tx_count, reserve0, reserve1
             FROM pairs
             "#,
         );
@@ -461,6 +479,8 @@ impl Database {
                 volume_usd: row.get(11)?,
                 reserve_usd: row.get(12)?,
                 tx_count: row.get(13)?,
+                reserve0: row.get(14)?,
+                reserve1: row.get(15)?,
             })
         })?;
 
@@ -481,7 +501,7 @@ impl Database {
             r#"
             SELECT id, network, dex_type, token0_id, token0_symbol, token0_name, token0_decimals,
                    token1_id, token1_symbol, token1_name, token1_decimals,
-                   volume_usd, reserve_usd, tx_count
+                   volume_usd, reserve_usd, tx_count, reserve0, reserve1
             FROM pairs
             WHERE id = ?
             "#,
@@ -507,6 +527,8 @@ impl Database {
                 volume_usd: row.get(11)?,
                 reserve_usd: row.get(12)?,
                 tx_count: row.get(13)?,
+                reserve0: row.get(14)?,
+                reserve1: row.get(15)?,
             })
         })?;
 
@@ -549,7 +571,7 @@ impl Database {
         let query = r#"
             SELECT id, network, dex_type, token0_id, token0_symbol, token0_name, token0_decimals,
                    token1_id, token1_symbol, token1_name, token1_decimals,
-                   volume_usd, reserve_usd, tx_count
+                   volume_usd, reserve_usd, tx_count, reserve0, reserve1
             FROM pairs
             ORDER BY CAST(reserve_usd AS REAL) DESC
             LIMIT ?
@@ -578,6 +600,8 @@ impl Database {
                 volume_usd: row.get(11)?,
                 reserve_usd: row.get(12)?,
                 tx_count: row.get(13)?,
+                reserve0: row.get(14)?,
+                reserve1: row.get(15)?,
             })
         })?;
 

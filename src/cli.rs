@@ -131,19 +131,8 @@ impl CliApp {
 
         // 获取并缓存 token 列表
         info!("获取 token 列表...");
-        let token_list = token_manager.fetch_tokens(None).await?;
+        let token_list = token_manager.get_tokens(None).await?;
         info!("获取到 {} 个 token", token_list.tokens.len());
-
-        // 保存到数据库
-        self.database.save_tokens(&token_list.tokens)?;
-        info!("Token 数据已保存到数据库");
-
-        // 显示数据库统计
-        let (total_tokens, last_update) = self.database.get_stats()?;
-        info!(
-            "数据库统计: 总计 {} 个 token，最后更新: {}",
-            total_tokens, last_update
-        );
 
         // 初始化套利监控器
         info!("初始化套利监控器...");
