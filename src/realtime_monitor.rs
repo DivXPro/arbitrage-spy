@@ -94,7 +94,7 @@ impl RealTimeMonitor {
             .map(|(index, pair)| {
                 // 计算实际价格
                 let price = if PriceCalculator::has_valid_reserves(pair) {
-                    match PriceCalculator::calculate_price_from_reserves(pair) {
+                    match PriceCalculator::calculate_price_from_pair_data(pair) {
                         Ok(price_value) => PriceCalculator::format_price(&price_value),
                         Err(_) => "$0.000000".to_string(),
                     }
