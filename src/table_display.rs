@@ -15,7 +15,7 @@ use tui_logger::{TuiLoggerWidget, TuiLoggerLevelOutput};
 use std::io::{self, Stdout};
 use std::time::Duration;
 use tokio::sync::mpsc;
-use log::info;
+use log::{info};
 
 #[derive(Clone, Debug)]
 pub struct PairDisplay {
@@ -115,11 +115,18 @@ impl TableDisplay {
                                     });
                                 }
                                 _ => {
-                                    if self.show_logs {
-                                        if let Some(tui_event) = self.map_key_to_tui_event(key.code) {
-                                             self.tui_logger_state.transition(tui_event);
+                                    // 处理方向键和其他键盘事件
+                                    if let Some(tui_event) = self.map_key_to_tui_event(key.code) {
+                                        if self.show_logs {
+                                            // 在日志模式下，方向键用于滚动日志
+                                            self.tui_logger_state.transition(tui_event);
                                             let _ = self.terminal.draw(|f| {
                                                 Self::render_ui_with_logs(f, &current_pairs, &mut self.tui_logger_state);
+                                            });
+                                        } else {
+                                            // 在表格模式下，方向键也应该有响应（目前只是重新绘制）
+                                            let _ = self.terminal.draw(|f| {
+                                                Self::render_ui_static(f, &current_pairs);
                                             });
                                         }
                                     }
@@ -203,7 +210,7 @@ impl TableDisplay {
         
         // 渲染表格
         if !pairs.is_empty() {
-            let header_cells = ["排名", "交易对", "DEX", "价格 (USD)", "流动性", "最后更新"]
+            let header_cells = ["排名", "交易对", "DEX", "价格 (USD)", "流动性", "Reserve0", "Reserve1", "最后更新"]
                 .iter()
                 .map(|h| Cell::from(*h).style(Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)));
             let header = Row::new(header_cells).height(1).bottom_margin(1);
@@ -223,9 +230,9 @@ impl TableDisplay {
             let table = Table::new(rows, [
                 Constraint::Length(4),  // 排名
                 Constraint::Length(12), // 交易对
-                Constraint::Length(10), // DEX
+                Constraint::Length(8),  // DEX
                 Constraint::Length(12), // 价格
-                Constraint::Length(12), // 流动性
+                Constraint::Length(10), // 流动性
                 Constraint::Length(12), // 最后更新
             ])
             .header(header)
@@ -273,7 +280,7 @@ impl TableDisplay {
         
         // 渲染表格
         if !pairs.is_empty() {
-            let header_cells = ["排名", "交易对", "DEX", "价格 (USD)", "流动性", "最后更新"]
+            let header_cells = ["排名", "交易对", "DEX", "价格 (USD)", "流动性", "Reserve0", "Reserve1", "最后更新"]
                 .iter()
                 .map(|h| Cell::from(*h).style(Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)));
             let header = Row::new(header_cells).height(1).bottom_margin(1);
@@ -293,10 +300,12 @@ impl TableDisplay {
             let table = Table::new(rows, &[
                 Constraint::Length(4),  // 排名
                 Constraint::Length(12), // 交易对
-                Constraint::Length(12), // DEX
+                Constraint::Length(8),  // DEX
                 Constraint::Length(12), // 价格
                 Constraint::Length(10), // 流动性
-                Constraint::Length(10), // 最后更新
+                Constraint::Length(15), // Reserve0
+                Constraint::Length(15), // Reserve1
+                Constraint::Length(12), // 最后更新
             ])
             .header(header)
             .block(Block::default().borders(Borders::ALL).title("交易对数据"));

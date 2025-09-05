@@ -93,8 +93,10 @@ impl RealTimeMonitor {
             .enumerate()
             .map(|(index, pair)| {
                 // 计算实际价格
+
                 let price = if PriceCalculator::has_valid_reserves(pair) {
-                    match PriceCalculator::calculate_price_from_pair_data(pair) {
+                    info!("Pair {} has valid reserves {} : {}", pair.id, pair.reserve0, pair.reserve1);
+                    match PriceCalculator::calculate_price(&pair.reserve0, &pair.reserve1) {
                         Ok(price_value) => PriceCalculator::format_price(&price_value),
                         Err(_) => "$0.000000".to_string(),
                     }
@@ -107,7 +109,6 @@ impl RealTimeMonitor {
                     pair: format!("{}/{}", pair.token0.symbol, pair.token1.symbol),
                     dex: pair.dex_type.clone(),
                     price,
-
                     liquidity: format!("${:.0}", pair.reserve_usd.parse::<f64>().unwrap_or(0.0)),
                     last_update: chrono::Utc::now().format("%H:%M:%S").to_string(),
                 }

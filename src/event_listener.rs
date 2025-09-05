@@ -13,7 +13,7 @@ use std::collections::HashMap;
 use std::env;
 
 use crate::database::Database;
-// use super::price_calculator::PriceCalculator;
+use crate::price_calculator::PriceCalculator;
 use crate::table_display::{DisplayMessage, PairDisplay};
 use crate::thegraph::PairData;
 
@@ -316,7 +316,10 @@ impl EventListener {
                     rank: index + 1,
                     pair: format!("{}/{}", pair.token0.symbol, pair.token1.symbol),
                     dex: pair.dex_type.clone(),
-                    price: "$0.000000".to_string(),
+                    price: match PriceCalculator::calculate_price(&pair.reserve0, &pair.reserve1) {
+                        Ok(price) => PriceCalculator::format_price(&price),
+                        Err(_) => "_".to_string(),
+                    },
                     liquidity: format!("${:.0}", pair.reserve_usd.parse::<f64>().unwrap_or(0.0)),
                     last_update: chrono::Utc::now().format("%H:%M:%S").to_string(),
                 }
@@ -335,14 +338,14 @@ impl EventListener {
             .into_iter()
             .enumerate()
             .map(|(index, pair)| {
-                // 模拟价格变化数据
-                let change_24h = format!("+{:.2}%", (index as f64 * 0.5) % 10.0);
-                
                 PairDisplay {
                     rank: index + 1,
                     pair: format!("{}/{}", pair.token0.symbol, pair.token1.symbol),
                     dex: pair.dex_type.clone(),
-                    price: "$0.000000".to_string(),
+                    price: match PriceCalculator::calculate_price(&pair.reserve0, &pair.reserve1) {
+                        Ok(price) => PriceCalculator::format_price(&price),
+                        Err(_) => "_".to_string(),
+                    },
                     liquidity: format!("${:.0}", pair.reserve_usd.parse::<f64>().unwrap_or(0.0)),
                     last_update: chrono::Utc::now().format("%H:%M:%S").to_string(),
                 }

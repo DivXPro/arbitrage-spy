@@ -10,11 +10,11 @@ impl PriceCalculator {
     /// 从储备量计算token0/token1的价格
     /// 
     /// # 参数
-    /// * `reserve0` - token0的储备量字符串
-    /// * `reserve1` - token1的储备量字符串
-    /// * `token0_decimals` - token0的小数位数
-    /// * `token1_decimals` - token1的小数位数
-    pub fn calculate_price_from_reserves(
+    /// * `reserve0` - token0的储备量字符串（可以是带小数点的形式）
+    /// * `reserve1` - token1的储备量字符串（可以是带小数点的形式）
+    /// * `token0_decimals` - token0的小数位数，默认为0（用于带小数点的字符串）
+    /// * `token1_decimals` - token1的小数位数，默认为0（用于带小数点的字符串）
+    pub fn calculate_price_with_decimals(
         reserve0: &str,
         reserve1: &str,
         token0_decimals: u32,
@@ -39,20 +39,17 @@ impl PriceCalculator {
         Ok(price)
     }
     
-    /// 从PairData计算token0/token1的价格（便利方法）
-    pub fn calculate_price_from_pair_data(pair: &PairData) -> Result<BigDecimal> {
-        let token0_decimals = pair.token0.decimals.parse::<u32>()
-            .map_err(|e| anyhow::anyhow!("Invalid token0 decimals: {}", e))?;
-        let token1_decimals = pair.token1.decimals.parse::<u32>()
-            .map_err(|e| anyhow::anyhow!("Invalid token1 decimals: {}", e))?;
-        
-        Self::calculate_price_from_reserves(
-            &pair.reserve0,
-            &pair.reserve1,
-            token0_decimals,
-            token1_decimals,
-        )
+    /// 从两个储备量计算token0/token1的价格（简化方法，默认小数位数为0）
+    /// 适用于带小数点的储备量字符串
+    /// 
+    /// # 参数
+    /// * `reserve0` - token0的储备量字符串（带小数点形式）
+    /// * `reserve1` - token1的储备量字符串（带小数点形式）
+    pub fn calculate_price(reserve0: &str, reserve1: &str) -> Result<BigDecimal> {
+        // 使用默认小数位数0，适用于带小数点的字符串
+        Self::calculate_price_with_decimals(reserve0, reserve1, 0, 0)
     }
+
     
     /// 格式化价格为显示字符串
     pub fn format_price(price: &BigDecimal) -> String {
@@ -85,19 +82,30 @@ mod tests {
     use crate::thegraph::TokenInfo;
     
     #[test]
-    fn test_calculate_price_from_reserves() {
-        // 测试独立的 calculate_price_from_reserves 方法
+    fn test_calculate_price_with_decimals() {
+        // 测试独立的 calculate_price_with_decimals 方法
         let reserve0 = "1000000000000000000000"; // 1000 WETH (18 decimals)
         let reserve1 = "2000000000000"; // 2,000,000 USDT (6 decimals)
         let token0_decimals = 18;
         let token1_decimals = 6;
         
-        let price = PriceCalculator::calculate_price_from_reserves(
+        let price = PriceCalculator::calculate_price_with_decimals(
             reserve0,
             reserve1,
             token0_decimals,
             token1_decimals,
         ).unwrap();
+        // 预期价格: 2,000,000 USDT / 1000 WETH = 2000 USDT per WETH
+        assert_eq!(price.to_string(), "2000");
+    }
+    
+    #[test]
+    fn test_calculate_price() {
+        // 测试带小数点的储备量字符串
+        let reserve0 = "1000.0"; // 1000 WETH
+        let reserve1 = "2000000.0"; // 2,000,000 USDT
+        
+        let price = PriceCalculator::calculate_price(reserve0, reserve1).unwrap();
         // 预期价格: 2,000,000 USDT / 1000 WETH = 2000 USDT per WETH
         assert_eq!(price.to_string(), "2000");
     }
@@ -127,7 +135,7 @@ mod tests {
             reserve1: "2000000000000".to_string(), // 2,000,000 USDT (6 decimals)
         };
         
-        let price = PriceCalculator::calculate_price_from_pair_data(&pair).unwrap();
+        let price = PriceCalculator::calculate_price(&pair.reserve0, &pair.reserve1).unwrap();
         // 预期价格: 2,000,000 USDT / 1000 WETH = 2000 USDT per WETH
         assert_eq!(price.to_string(), "2000");
     }
