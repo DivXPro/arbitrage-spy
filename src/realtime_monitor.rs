@@ -1,6 +1,5 @@
 use anyhow::Result;
 use log::info;
-use std::time::Duration;
 use tokio::sync::mpsc;
 use chrono;
 
@@ -8,7 +7,7 @@ use crate::config::Config;
 use crate::database::Database;
 use crate::event_listener::EventListener;
 use crate::price_calculator::PriceCalculator;
-use crate::table_display::{DisplayMessage, TableDisplay, PairDisplay};
+use crate::table_display::{DisplayMessage, TableDisplay, PairDisplay, PairDisplayConverter};
 use crate::thegraph::PairData;
 
 pub struct RealTimeMonitor {
@@ -49,7 +48,6 @@ impl RealTimeMonitor {
             self.database.clone(),
             sender,
             count,
-            Duration::from_secs(interval),
             initial_pairs,
         ).await;
         println!("事件监听模块创建完成");
@@ -88,33 +86,7 @@ impl RealTimeMonitor {
 
     /// 将 PairData 转换为 PairDisplay
     fn convert_pairs_to_display(&self, pairs: &[PairData]) -> Result<Vec<PairDisplay>> {
-        let display_pairs: Vec<PairDisplay> = pairs
-            .iter()
-            .enumerate()
-            .map(|(index, pair)| {
-                // 计算实际价格
-
-                let price = if PriceCalculator::has_valid_reserves(pair) {
-                    info!("Pair {} has valid reserves {} : {}", pair.id, pair.reserve0, pair.reserve1);
-                    match PriceCalculator::calculate_price(&pair.reserve0, &pair.reserve1) {
-                        Ok(price_value) => PriceCalculator::format_price(&price_value),
-                        Err(_) => "$0.000000".to_string(),
-                    }
-                } else {
-                    "$0.000000".to_string()
-                };
-                
-                PairDisplay {
-                    rank: index + 1,
-                    pair: format!("{}/{}", pair.token0.symbol, pair.token1.symbol),
-                    dex: pair.dex_type.clone(),
-                    price,
-                    liquidity: format!("${:.0}", pair.reserve_usd.parse::<f64>().unwrap_or(0.0)),
-                    last_update: chrono::Utc::now().format("%H:%M:%S").to_string(),
-                }
-            })
-            .collect();
-        
-        Ok(display_pairs)
+        // 使用统一的转换工具
+        PairDisplayConverter::convert_list(pairs)
     }
 }

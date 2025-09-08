@@ -1,8 +1,6 @@
 use anyhow::Result;
 use log::{error, info, debug, warn};
-use std::time::Duration;
 use tokio::sync::mpsc;
-use tokio::time;
 use ethers::{
     prelude::*,
     providers::{Provider, StreamExt},
@@ -14,9 +12,9 @@ use std::env;
 
 use crate::database::Database;
 use crate::price_calculator::PriceCalculator;
-use crate::table_display::{DisplayMessage, PairDisplay};
+use crate::table_display::{DisplayMessage, PairDisplay, PairDisplayConverter};
 use crate::thegraph::PairData;
-
+use chrono;
 
 #[derive(Debug, Clone)]
 pub enum EventType {
@@ -45,9 +43,9 @@ pub struct EventListener {
     database: Database,
     sender: mpsc::Sender<DisplayMessage>,
     count: usize,
-    interval: Duration,
     provider: Option<Arc<Provider<ethers::providers::Ws>>>,
     contracts: HashMap<String, H160>,
+    pairs: Vec<PairData>,
 }
 
 impl EventListener {
@@ -55,14 +53,13 @@ impl EventListener {
         database: Database,
         sender: mpsc::Sender<DisplayMessage>,
         count: usize,
-        interval: Duration,
         initial_pairs: Vec<PairData>,
     ) -> Self {
         // 尝试连接到以太坊节点
         let provider = Self::try_connect_to_ethereum().await;
         
         // 从初始交易对数据中提取合约地址
-        let mut contracts = HashMap::new();
+        let mut contracts: HashMap<String, H160> = HashMap::new();
         for pair in &initial_pairs {
             let pair_name = format!("{}-{}", pair.token0.symbol, pair.token1.symbol);
             if let Ok(address) = pair.id.parse::<H160>() {
@@ -73,13 +70,14 @@ impl EventListener {
             }
         }
         
+
         let event_listener = Self {
-            database,
+            database: database.clone(),
             sender,
             count,
-            interval,
             provider,
             contracts,
+            pairs: initial_pairs,
         };
         
         event_listener
@@ -190,14 +188,10 @@ impl EventListener {
         let sender = self.sender.clone();
         let database = self.database.clone();
         let count = self.count;
-        let interval = self.interval;
         
         tokio::select! {
-            _ = Self::listen_swap_events_static(provider.clone(), swap_filter, sender.clone(), database.clone(), count) => {
+            _ = Self::listen_swap_events_static(self.contracts.clone(), provider.clone(), swap_filter, sender.clone(), self.pairs.clone()) => {
                 error!("Swap事件监听意外停止");
-            }
-            _ = Self::periodic_data_refresh_static(sender.clone(), database.clone(), count, interval) => {
-                error!("定期数据刷新意外停止");
             }
         }
         
@@ -206,11 +200,11 @@ impl EventListener {
     }
     
     async fn listen_swap_events_static(
+        contracts: HashMap<String, H160>,
         provider: Arc<Provider<ethers::providers::Ws>>, 
         filter: Filter,
         sender: mpsc::Sender<DisplayMessage>,
-        database: Database,
-        count: usize
+        pairs: Vec<PairData>
     ) -> Result<()> {
         info!("开始监听Swap事件...");
         
@@ -220,36 +214,20 @@ impl EventListener {
         info!("WebSocket事件流已建立，等待Swap事件...");
         
         while let Some(log) = stream.next().await {
-             info!("检测到实时Swap事件，合约地址: {:?}", log.address);
+            let contract_name = contracts.iter().find(|(_, addr)| **addr == log.address)
+                .map(|(name, _)| name.clone())
+                .unwrap_or_else(|| format!("{:?}", log.address));
+            info!("检测到实时Swap事件，合约: {}", contract_name);
              
-             // 处理事件
-             if let Err(e) = Self::process_swap_event(&log, &database).await {
-                 error!("处理Swap事件失败: {}", e);
-                 continue;
-             }
-             
-             // 获取更新后的数据并发送
-             match Self::fetch_and_process_data_static(&database, count).await {
-                 Ok(pairs) => {
-                     if !pairs.is_empty() {
-                         info!("Swap事件触发数据更新，共 {} 个交易对:", pairs.len());
-                         for (i, pair) in pairs.iter().enumerate().take(5) {
-                             info!("  {}. {} ({}) - 价格: {} - 流动性: {}", 
-                                 i + 1, pair.pair, pair.dex, pair.price, pair.liquidity);
-                         }
-                         if pairs.len() > 5 {
-                             info!("  ... 还有 {} 个交易对", pairs.len() - 5);
-                         }
-                         
-                         if let Err(e) = sender.send(DisplayMessage::UpdateData(pairs)).await {
-                             error!("发送Swap事件更新失败: {}", e);
-                             break;
-                         }
-                         debug!("实时Swap事件触发的数据更新已推送");
-                     }
+             // 处理事件并获取局部更新数据
+             match Self::process_swap_event(&log, &sender, &contracts, pairs.clone()).await {
+                 Ok(_) => {
+                     info!("成功处理Swap事件并发送局部更新");
+                     debug!("实时Swap事件触发的数据更新已推送");
                  }
                  Err(e) => {
-                     error!("获取Swap事件后的数据失败: {}", e);
+                     error!("处理Swap事件失败: {}", e);
+                     continue;
                  }
              }
          }
@@ -258,108 +236,80 @@ impl EventListener {
         Ok(())
     }
     
-    async fn process_swap_event(log: &Log, database: &Database) -> Result<()> {
-        // 解析Swap事件的具体数据
-        // 这里可以根据不同DEX的Swap事件格式进行解析
-        debug!("处理来自合约 {:?} 的Swap事件", log.address);
-        
-        // TODO: 实现具体的事件解析逻辑
-        // 1. 解析事件参数 (token amounts, addresses等)
-        // 2. 计算价格变化
-        // 3. 更新数据库中的价格信息
-        
-        Ok(())
-    }
-
-    async fn periodic_data_refresh_static(
-        sender: mpsc::Sender<DisplayMessage>,
-        database: Database,
-        count: usize,
-        interval: Duration
+    async fn process_swap_event(
+        log: &Log, 
+        sender: &mpsc::Sender<DisplayMessage>, 
+        contracts: &HashMap<String, H160>,
+        pairs: Vec<PairData>,
     ) -> Result<()> {
-        info!("启动定期数据刷新...");
+        // 查找合约名称
+        let contract_name = contracts.iter()
+            .find(|(_, addr)| **addr == log.address)
+            .map(|(name, _)| name.clone())
+            .unwrap_or_else(|| format!("{:?}", log.address));
         
-        let mut interval_timer = time::interval(interval);
-        
-        loop {
-            interval_timer.tick().await;
-            
-            match Self::fetch_and_process_data_static(&database, count).await {
-                Ok(pairs) => {
-                    if !pairs.is_empty() {
-                        if let Err(e) = sender.send(DisplayMessage::UpdateData(pairs)).await {
-                            error!("发送定期刷新数据失败: {}", e);
-                            break;
-                        }
-                        debug!("定期数据刷新完成");
-                    }
-                }
-                Err(e) => {
-                    error!("定期数据刷新失败: {}", e);
-                }
-            }
+        // 解析Swap事件的具体数据
+        debug!("处理来自合约 {} 的Swap事件", contract_name);
+                
+        // 查找与事件相关的交易对索引
+         if let Some((index, pair)) = pairs.iter().enumerate()
+             .find(|(_, pair)| {
+                 // 这里需要根据实际情况匹配交易对
+                 // 可以通过合约地址或其他标识符来匹配
+                 if let Ok(pair_address) = pair.id.parse::<H160>() {
+                     pair_address == log.address
+                 } else {
+                     false
+                 }
+             }) {
+             
+             let pair_name = format!("{}/{}", pair.token0.symbol, pair.token1.symbol);
+             
+             // 将 PairData 转换为 PairDisplay（使用统一的转换工具）
+             let updated_pair_display = PairDisplayConverter::convert_for_event(pair, index + 1);
+             
+             // 发送局部更新消息
+             if let Err(e) = sender.send(DisplayMessage::PartialUpdate { 
+                 index, 
+                 data: updated_pair_display 
+             }).await {
+                 error!("发送局部更新失败: {}", e);
+             } else {
+                 info!("已发送交易对 {} 的局部更新 (索引: {})", pair_name, index);
+             }
+        } else {
+            // 如果找不到对应的交易对，记录警告
+            warn!("未找到与合约地址 {:?} 对应的交易对", log.address);
         }
         
         Ok(())
     }
-    
+
     async fn fetch_and_process_data_static(database: &Database, count: usize) -> Result<Vec<PairDisplay>> {
         // 从数据库获取最新的交易对数据
         let pairs = database.get_top_pairs(count)?;
         
-        // 转换为显示格式
-        let display_pairs: Vec<PairDisplay> = pairs
-            .into_iter()
-            .enumerate()
-            .map(|(index, pair)| {
-                PairDisplay {
-                    rank: index + 1,
-                    pair: format!("{}/{}", pair.token0.symbol, pair.token1.symbol),
-                    dex: pair.dex_type.clone(),
-                    price: match PriceCalculator::calculate_price(&pair.reserve0, &pair.reserve1) {
-                        Ok(price) => PriceCalculator::format_price(&price),
-                        Err(_) => "_".to_string(),
-                    },
-                    liquidity: format!("${:.0}", pair.reserve_usd.parse::<f64>().unwrap_or(0.0)),
-                    last_update: chrono::Utc::now().format("%H:%M:%S").to_string(),
-                }
-            })
-            .collect();
+        // 转换为显示格式（使用统一的转换工具）
+        let display_pairs = PairDisplayConverter::convert_owned(pairs)?;
         
         Ok(display_pairs)
     }
     
     async fn fetch_and_process_data(&self) -> Result<Vec<PairDisplay>> {
-        // 从数据库获取最新的交易对数据
-        let pairs = self.database.get_top_pairs(self.count)?;
-        
-        // 转换为显示格式
-        let display_pairs: Vec<PairDisplay> = pairs
-            .into_iter()
-            .enumerate()
-            .map(|(index, pair)| {
-                PairDisplay {
-                    rank: index + 1,
-                    pair: format!("{}/{}", pair.token0.symbol, pair.token1.symbol),
-                    dex: pair.dex_type.clone(),
-                    price: match PriceCalculator::calculate_price(&pair.reserve0, &pair.reserve1) {
-                        Ok(price) => PriceCalculator::format_price(&price),
-                        Err(_) => "_".to_string(),
-                    },
-                    liquidity: format!("${:.0}", pair.reserve_usd.parse::<f64>().unwrap_or(0.0)),
-                    last_update: chrono::Utc::now().format("%H:%M:%S").to_string(),
-                }
-            })
-            .collect();
-        
-        Ok(display_pairs)
+        Self::fetch_and_process_data_static(&self.database, self.count).await
+    }
+    
+    /// 更新缓存数据
+    async fn update_cache(&self) -> Result<()> {
+        // 这个方法暂时不需要实现，因为我们直接使用pairs字段
+        Ok(())
     }
     
     async fn handle_price_update_event(&self) -> Result<()> {
         // 获取最新数据并推送更新
         let pairs = self.fetch_and_process_data().await?;
         if !pairs.is_empty() {
-            self.sender.send(DisplayMessage::UpdateData(pairs)).await
+            self.sender.send(DisplayMessage::FullUpdate(pairs)).await
                 .map_err(|e| anyhow::anyhow!("发送价格更新消息失败: {}", e))?;
         }
         Ok(())
@@ -369,7 +319,7 @@ impl EventListener {
         // 获取最新数据并推送更新
         let pairs = self.fetch_and_process_data().await?;
         if !pairs.is_empty() {
-            self.sender.send(DisplayMessage::UpdateData(pairs)).await
+            self.sender.send(DisplayMessage::FullUpdate(pairs)).await
                 .map_err(|e| anyhow::anyhow!("发送流动性更新消息失败: {}", e))?;
         }
         Ok(())
@@ -379,7 +329,7 @@ impl EventListener {
         // 获取最新数据并推送更新
         let pairs = self.fetch_and_process_data().await?;
         if !pairs.is_empty() {
-            self.sender.send(DisplayMessage::UpdateData(pairs)).await
+            self.sender.send(DisplayMessage::FullUpdate(pairs)).await
                 .map_err(|e| anyhow::anyhow!("发送新交易对消息失败: {}", e))?;
         }
         Ok(())

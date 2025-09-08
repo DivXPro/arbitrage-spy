@@ -16,6 +16,9 @@ use std::io::{self, Stdout};
 use std::time::Duration;
 use tokio::sync::mpsc;
 use log::{info};
+use chrono;
+use crate::price_calculator::PriceCalculator;
+use crate::thegraph::PairData;
 
 #[derive(Clone, Debug)]
 pub struct PairDisplay {
@@ -29,8 +32,79 @@ pub struct PairDisplay {
 
 #[derive(Debug, Clone)]
 pub enum DisplayMessage {
-    UpdateData(Vec<PairDisplay>),
+    /// 全量更新 - 替换所有数据
+    FullUpdate(Vec<PairDisplay>),
+    /// 局部更新 - 更新指定索引的数据
+    PartialUpdate { index: usize, data: PairDisplay },
+    /// 批量局部更新 - 更新多个指定索引的数据
+    BatchPartialUpdate(Vec<(usize, PairDisplay)>),
+    /// 关闭显示
     Shutdown,
+}
+
+/// PairData转换工具
+pub struct PairDisplayConverter;
+
+impl PairDisplayConverter {
+    /// 将单个PairData转换为PairDisplay
+    pub fn convert_single(pair: &PairData, rank: usize) -> PairDisplay {
+        let price = if PriceCalculator::has_valid_reserves(pair) {
+            match PriceCalculator::calculate_price(&pair.reserve0, &pair.reserve1) {
+                Ok(price_value) => PriceCalculator::format_price(&price_value),
+                Err(_) => "$0.000000".to_string(),
+            }
+        } else {
+            "$0.000000".to_string()
+        };
+        
+        PairDisplay {
+            rank,
+            pair: format!("{}/{}", pair.token0.symbol, pair.token1.symbol),
+            dex: pair.dex_type.clone(),
+            price,
+            liquidity: format!("${:.0}", pair.reserve_usd.parse::<f64>().unwrap_or(0.0)),
+            last_update: chrono::Utc::now().format("%H:%M:%S").to_string(),
+        }
+    }
+    
+    /// 将PairData列表转换为PairDisplay列表
+    pub fn convert_list(pairs: &[PairData]) -> Result<Vec<PairDisplay>> {
+        let display_pairs: Vec<PairDisplay> = pairs
+            .iter()
+            .enumerate()
+            .map(|(index, pair)| Self::convert_single(pair, index + 1))
+            .collect();
+        
+        Ok(display_pairs)
+    }
+    
+    /// 将PairData向量转换为PairDisplay向量（消费输入）
+    pub fn convert_owned(pairs: Vec<PairData>) -> Result<Vec<PairDisplay>> {
+        let display_pairs: Vec<PairDisplay> = pairs
+            .into_iter()
+            .enumerate()
+            .map(|(index, pair)| Self::convert_single(&pair, index + 1))
+            .collect();
+        
+        Ok(display_pairs)
+    }
+    
+    /// 为事件处理创建PairDisplay（使用自定义错误处理）
+    pub fn convert_for_event(pair: &PairData, rank: usize) -> PairDisplay {
+        let price = match PriceCalculator::calculate_price(&pair.reserve0, &pair.reserve1) {
+            Ok(price) => PriceCalculator::format_price(&price),
+            Err(_) => "_".to_string(),
+        };
+        
+        PairDisplay {
+            rank,
+            pair: format!("{}/{}", pair.token0.symbol, pair.token1.symbol),
+            dex: pair.dex_type.clone(),
+            price,
+            liquidity: format!("${:.0}", pair.reserve_usd.parse::<f64>().unwrap_or(0.0)),
+            last_update: chrono::Utc::now().format("%H:%M:%S").to_string(),
+        }
+    }
 }
 
 pub struct TableDisplay {
@@ -83,8 +157,34 @@ impl TableDisplay {
             tokio::select! {
                 message = self.receiver.recv() => {
                     match message {
-                        Some(DisplayMessage::UpdateData(pairs)) => {
+                        Some(DisplayMessage::FullUpdate(pairs)) => {
                             current_pairs = pairs;
+                            let _ = self.terminal.draw(|f| {
+                                if self.show_logs {
+                                     Self::render_ui_with_logs(f, &current_pairs, &mut self.tui_logger_state);
+                                 } else {
+                                     Self::render_ui_static(f, &current_pairs);
+                                 }
+                            });
+                        }
+                        Some(DisplayMessage::PartialUpdate { index, data }) => {
+                            if index < current_pairs.len() {
+                                current_pairs[index] = data;
+                                let _ = self.terminal.draw(|f| {
+                                    if self.show_logs {
+                                         Self::render_ui_with_logs(f, &current_pairs, &mut self.tui_logger_state);
+                                     } else {
+                                         Self::render_ui_static(f, &current_pairs);
+                                     }
+                                });
+                            }
+                        }
+                        Some(DisplayMessage::BatchPartialUpdate(updates)) => {
+                            for (index, data) in updates {
+                                if index < current_pairs.len() {
+                                    current_pairs[index] = data;
+                                }
+                            }
                             let _ = self.terminal.draw(|f| {
                                 if self.show_logs {
                                      Self::render_ui_with_logs(f, &current_pairs, &mut self.tui_logger_state);
@@ -168,7 +268,7 @@ impl TableDisplay {
         let chunks = Layout::default()
             .direction(Direction::Vertical)
             .constraints([Constraint::Percentage(60), Constraint::Percentage(40)])
-            .split(f.size());
+            .split(f.area());
         
         Self::render_table_area(f, chunks[0], pairs, true);
         Self::render_log_area(f, chunks[1], tui_logger_state);
@@ -210,7 +310,7 @@ impl TableDisplay {
         
         // 渲染表格
         if !pairs.is_empty() {
-            let header_cells = ["排名", "交易对", "DEX", "价格 (USD)", "流动性", "Reserve0", "Reserve1", "最后更新"]
+            let header_cells = ["排名", "交易对", "DEX", "价格 (USD)", "流动性", "最后更新"]
                 .iter()
                 .map(|h| Cell::from(*h).style(Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)));
             let header = Row::new(header_cells).height(1).bottom_margin(1);
@@ -237,7 +337,7 @@ impl TableDisplay {
             ])
             .header(header)
             .block(Block::default().borders(Borders::ALL).title("交易对数据"))
-            .highlight_style(Style::default().add_modifier(Modifier::REVERSED))
+            .row_highlight_style(Style::default().add_modifier(Modifier::REVERSED))
             .highlight_symbol(">> ");
             
             f.render_widget(table, chunks[1]);
@@ -270,7 +370,7 @@ impl TableDisplay {
                 Constraint::Min(0),    // 表格
                 Constraint::Length(3), // 提示信息
             ])
-            .split(f.size());
+            .split(f.area());
         
         // 渲染标题
         let title = Paragraph::new("🚀 实时交易对监控")
