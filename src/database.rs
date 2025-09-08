@@ -564,53 +564,5 @@ impl Database {
         }
     }
 
-    /// 获取前N个交易对，按流动性排序
-    pub fn get_top_pairs(&self, limit: usize) -> Result<Vec<PairData>> {
-        use crate::thegraph::TokenInfo;
-        
-        let query = r#"
-            SELECT id, network, dex_type, token0_id, token0_symbol, token0_name, token0_decimals,
-                   token1_id, token1_symbol, token1_name, token1_decimals,
-                   volume_usd, reserve_usd, tx_count, reserve0, reserve1
-            FROM pairs
-            ORDER BY CAST(reserve_usd AS REAL) DESC
-            LIMIT ?
-        "#;
-
-        let binding = self.conn.lock().unwrap();
-        let mut stmt = binding.prepare(query)?;
-        
-        let pair_iter = stmt.query_map([limit], |row| {
-            Ok(PairData {
-                id: row.get(0)?,
-                network: row.get(1)?,
-                dex_type: row.get(2)?,
-                token0: TokenInfo {
-                    id: row.get(3)?,
-                    symbol: row.get(4)?,
-                    name: row.get(5)?,
-                    decimals: row.get(6)?,
-                },
-                token1: TokenInfo {
-                    id: row.get(7)?,
-                    symbol: row.get(8)?,
-                    name: row.get(9)?,
-                    decimals: row.get(10)?,
-                },
-                volume_usd: row.get(11)?,
-                reserve_usd: row.get(12)?,
-                tx_count: row.get(13)?,
-                reserve0: row.get(14)?,
-                reserve1: row.get(15)?,
-            })
-        })?;
-
-        let mut pairs = Vec::new();
-        for pair in pair_iter {
-            pairs.push(pair?);
-        }
-
-        Ok(pairs)
-    }
 
 }

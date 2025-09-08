@@ -32,7 +32,8 @@ impl RealTimeMonitor {
         
         // 准备初始数据
         println!("正在获取初始交易对数据...");
-        let initial_pairs = self.database.get_top_pairs(count.min(10))?;
+        let pair_manager = crate::pairs::PairManager::new(&self.database);
+        let initial_pairs = pair_manager.load_pairs_by_filter(None, None, Some(count.min(10)))?;
         println!("获取到 {} 个初始交易对", initial_pairs.len());
         let initial_data = self.convert_pairs_to_display(&initial_pairs)?;
         println!("初始数据转换完成");

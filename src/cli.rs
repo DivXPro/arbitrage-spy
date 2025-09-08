@@ -183,23 +183,59 @@ impl CliApp {
     async fn update_pairs(&self) -> Result<()> {
         info!("开始更新 pairs 数据...");
 
-        // 获取 Uniswap V2 交易对
-        info!("从 TheGraph 获取 Uniswap V2 交易对...");
+        // 通过遍历 token 表中的每个 token，查询 TheGraph 相关的交易对来更新数据
+        info!("遍历 token 表，从 TheGraph 获取相关交易对...");
+        let token_manager = TokenManager::new(&self.database);
+        let pair_manager = PairManager::new(&self.database);
         let graph_client = TheGraphClient::new();
-        match graph_client.get_top_pairs(100).await {
-            Ok(pairs) => {
-                info!("成功获取到 {} 个 Uniswap V2 交易对", pairs.len());
+        
+        match token_manager.get_tokens(None).await {
+            Ok(token_list) => {
+                info!("从数据库获取到 {} 个 token", token_list.tokens.len());
+                let mut total_pairs_saved = 0;
                 
-                // 使用 PairManager 保存交易对到数据库
-                let pair_manager = PairManager::new(&self.database);
-                if let Err(e) = pair_manager.save_pairs(&pairs) {
-                    error!("保存交易对到数据库失败: {}", e);
-                } else {
-                    info!("交易对数据已保存到数据库");
+                for (index, token) in token_list.tokens.iter().enumerate() {
+                    // 需要从 token 的 platforms 中获取以太坊地址
+                    if let Some(ethereum_address) = token.platforms.get("ethereum").and_then(|addr| addr.as_ref()) {
+                        info!("[{}/{}] 正在查询 token {} ({}) 的相关交易对...", 
+                             index + 1, token_list.tokens.len(), token.symbol, ethereum_address);
+                        
+                        // 从 TheGraph 查询该 token 相关的交易对
+                        match graph_client.get_pairs_by_token(ethereum_address, 50).await {
+                            Ok(pairs) => {
+                                if !pairs.is_empty() {
+                                    info!("Token {} 从 TheGraph 获取到 {} 个相关交易对", 
+                                         token.symbol, pairs.len());
+                                    
+                                    // 保存交易对到数据库
+                                    if let Err(e) = pair_manager.save_pairs(&pairs) {
+                                        error!("保存 token {} 的交易对到数据库失败: {}", token.symbol, e);
+                                    } else {
+                                        total_pairs_saved += pairs.len();
+                                        info!("Token {} 的 {} 个交易对已保存到数据库", token.symbol, pairs.len());
+                                    }
+                                } else {
+                                    info!("Token {} 未找到相关交易对", token.symbol);
+                                }
+                            }
+                            Err(e) => {
+                                error!("从 TheGraph 查询 token {} 相关交易对失败: {}", token.symbol, e);
+                            }
+                        }
+                        
+                        // 添加延迟以避免请求过于频繁
+                        if index < token_list.tokens.len() - 1 {
+                            tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
+                        }
+                    } else {
+                        info!("Token {} 没有以太坊地址，跳过", token.symbol);
+                    }
                 }
+                
+                info!("更新完成！总共保存了 {} 个交易对到数据库", total_pairs_saved);
             }
             Err(e) => {
-                error!("获取 Uniswap V2 交易对失败: {}", e);
+                error!("从数据库获取 token 列表失败: {}", e);
             }
         }
 

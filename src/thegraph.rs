@@ -195,6 +195,87 @@ impl TheGraphClient {
             .collect()
     }
 
+    /// Get pairs by token address
+    pub async fn get_pairs_by_token(&self, token_address: &str, limit: i32) -> Result<Vec<PairData>> {
+        let query = r#"
+            query GetPairsByToken($token: String!, $first: Int!) {
+                pairs(
+                    first: $first,
+                    orderBy: volumeUSD,
+                    orderDirection: desc,
+                    where: {
+                        or: [
+                            { token0: $token },
+                            { token1: $token }
+                        ],
+                        reserveUSD_gt: "1000"
+                    }
+                ) {
+                    id
+                    token0 {
+                        id
+                        symbol
+                        name
+                        decimals
+                    }
+                    token1 {
+                        id
+                        symbol
+                        name
+                        decimals
+                    }
+                    volumeUSD
+                    reserveUSD
+                    txCount
+                    reserve0
+                    reserve1
+                }
+            }
+        "#;
+
+        let variables = serde_json::json!({
+            "token": token_address.to_lowercase(),
+            "first": limit
+        });
+
+        let request = GraphQLRequest {
+            query: query.to_string(),
+            variables,
+        };
+
+        let url = format!(
+            "{}/subgraphs/id/{}",
+            self.base_url, self.uniswap_v2_subgraph_id
+        );
+        
+        let mut request_builder = self.client.post(&url).json(&request);
+        
+        // Add Bearer token if available
+        if let Some(ref api_key) = self.api_key {
+            request_builder = request_builder.header("Authorization", format!("Bearer {}", api_key));
+        }
+        
+        let response = request_builder
+            .send()
+            .await?
+            .json::<GraphQLResponse>()
+            .await?;
+
+        if let Some(errors) = response.errors {
+            return Err(anyhow!("GraphQL errors: {:?}", errors));
+        }
+
+        let pairs = response
+            .data
+            .ok_or_else(|| anyhow!("No data in response"))?
+            .pairs;
+
+        // Filter out stablecoins
+        let filtered_pairs = self.filter_stablecoins(pairs);
+
+        Ok(filtered_pairs)
+    }
+
     /// Get pair information by address
     pub async fn get_pair_by_address(&self, pair_address: &str) -> Result<Option<PairData>> {
         let query = r#"

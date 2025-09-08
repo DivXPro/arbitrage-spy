@@ -287,7 +287,8 @@ impl EventListener {
 
     async fn fetch_and_process_data_static(database: &Database, count: usize) -> Result<Vec<PairDisplay>> {
         // 从数据库获取最新的交易对数据
-        let pairs = database.get_top_pairs(count)?;
+        let pair_manager = crate::pairs::PairManager::new(&database);
+        let pairs = pair_manager.load_pairs_by_filter(None, None, Some(count))?;
         
         // 转换为显示格式（使用统一的转换工具）
         let display_pairs = PairDisplayConverter::convert_owned(pairs)?;
