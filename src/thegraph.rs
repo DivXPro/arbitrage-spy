@@ -205,10 +205,9 @@ impl TheGraphClient {
                     orderDirection: desc,
                     where: {
                         or: [
-                            { token0: $token },
-                            { token1: $token }
-                        ],
-                        reserveUSD_gt: "1000"
+                            { token0: $token, reserveUSD_gt: "1000" },
+                            { token1: $token, reserveUSD_gt: "1000" }
+                        ]
                     }
                 ) {
                     id

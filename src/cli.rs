@@ -12,6 +12,7 @@ use crate::token::TokenManager;
 
 // 命令行参数常量
 const UPDATE_TOKENS_ARG: &str = "update";
+const UPDATE_PAIRS_ARG: &str = "update-pairs";
 const MONITOR_ARG: &str = "monitor";
 
 /// CLI应用程序结构
@@ -44,6 +45,12 @@ impl CliApp {
                 Arg::new(UPDATE_TOKENS_ARG)
                     .long(UPDATE_TOKENS_ARG)
                     .help("更新 token 数据")
+                    .action(clap::ArgAction::SetTrue),
+            )
+            .arg(
+                Arg::new(UPDATE_PAIRS_ARG)
+                    .long(UPDATE_PAIRS_ARG)
+                    .help("更新交易对数据")
                     .action(clap::ArgAction::SetTrue),
             )
             .arg(
@@ -80,7 +87,13 @@ impl CliApp {
         if matches.get_flag(UPDATE_TOKENS_ARG) {
             info!("执行 token 更新命令...");
             self.update_data().await?;
-            info!("Token 更新完成");
+            return Ok(());
+        }
+
+        // 检查是否只需要更新交易对
+        if matches.get_flag(UPDATE_PAIRS_ARG) {
+            info!("执行交易对更新命令...");
+            self.update_pairs().await?;
             return Ok(());
         }
 
@@ -160,7 +173,7 @@ impl CliApp {
         // 初始化 Token 管理器
         let token_manager = TokenManager::new(&self.database);
 
-        // 获取 token 列表
+        // 获取 token 列表 (限制为前100个以避免长时间等待)
         info!("从 CoinGecko API 获取 token 列表...");
         let token_list = token_manager.fetch_tokens(None).await?;
         info!("获取到 {} 个 token", token_list.tokens.len());
@@ -189,7 +202,8 @@ impl CliApp {
         let pair_manager = PairManager::new(&self.database);
         let graph_client = TheGraphClient::new();
         
-        match token_manager.get_tokens(None).await {
+        // 只获取 market_cap_rank 前100的币种
+        match token_manager.get_tokens(Some(100)).await {
             Ok(token_list) => {
                 info!("从数据库获取到 {} 个 token", token_list.tokens.len());
                 let mut total_pairs_saved = 0;

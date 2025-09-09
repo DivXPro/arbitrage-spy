@@ -23,9 +23,10 @@ async fn main() -> Result<()> {
     // 加载 .env 文件
     dotenv::dotenv().ok();
 
-    // 初始化 tui-logger 日志系统
-    tui_logger::init_logger(log::LevelFilter::Info).unwrap();
-    tui_logger::set_default_level(log::LevelFilter::Info);
+    // 初始化标准日志系统
+    env_logger::Builder::from_default_env()
+        .filter_level(log::LevelFilter::Info)
+        .init();
 
     info!("启动区块链套利监控系统...");
 

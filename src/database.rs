@@ -167,12 +167,12 @@ impl Database {
     pub fn load_tokens(&self, limit: Option<usize>) -> Result<Vec<Token>> {
         let (query, params_vec): (&str, Vec<rusqlite::types::Value>) = if let Some(limit_val) = limit {
             (
-                "SELECT id, symbol, name, market_cap_rank, current_price, market_cap, total_volume, price_change_percentage_24h, platforms FROM tokens ORDER BY market_cap_rank ASC LIMIT ?1",
+                "SELECT id, symbol, name, market_cap_rank, current_price, market_cap, total_volume, price_change_percentage_24h, platforms FROM tokens WHERE market_cap_rank IS NOT NULL ORDER BY market_cap_rank ASC LIMIT ?1",
                 vec![rusqlite::types::Value::Integer(limit_val as i64)]
             )
         } else {
             (
-                "SELECT id, symbol, name, market_cap_rank, current_price, market_cap, total_volume, price_change_percentage_24h, platforms FROM tokens ORDER BY market_cap_rank ASC",
+                "SELECT id, symbol, name, market_cap_rank, current_price, market_cap, total_volume, price_change_percentage_24h, platforms FROM tokens WHERE market_cap_rank IS NOT NULL ORDER BY market_cap_rank ASC",
                 vec![]
             )
         };
