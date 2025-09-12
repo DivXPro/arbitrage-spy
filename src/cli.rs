@@ -214,27 +214,49 @@ impl CliApp {
                         info!("[{}/{}] 正在查询 token {} ({}) 的相关交易对...", 
                              index + 1, token_list.tokens.len(), token.symbol, ethereum_address);
                         
-                        // 从 TheGraph 查询该 token 相关的交易对
-                        match graph_client.get_pairs_by_token(ethereum_address, 50).await {
-                            Ok(pairs) => {
-                                if !pairs.is_empty() {
-                                    info!("Token {} 从 TheGraph 获取到 {} 个相关交易对", 
-                                         token.symbol, pairs.len());
-                                    
-                                    // 保存交易对到数据库
-                                    if let Err(e) = pair_manager.save_pairs(&pairs) {
-                                        error!("保存 token {} 的交易对到数据库失败: {}", token.symbol, e);
-                                    } else {
-                                        total_pairs_saved += pairs.len();
-                                        info!("Token {} 的 {} 个交易对已保存到数据库", token.symbol, pairs.len());
-                                    }
-                                } else {
-                                    info!("Token {} 未找到相关交易对", token.symbol);
+                        let mut all_pairs = Vec::new();
+                             
+                        // 从 TheGraph 查询该 token 相关的 V2 交易对
+                        // match graph_client.get_pairs_by_token(ethereum_address, 25).await {
+                        //     Ok(v2_pairs) => {
+                        //         if !v2_pairs.is_empty() {
+                        //             info!("Token {} 从 Uniswap V2 获取到 {} 个相关交易对", 
+                        //                  token.symbol, v2_pairs.len());
+                        //             all_pairs.extend(v2_pairs);
+                        //         }
+                        //     }
+                        //     Err(e) => {
+                        //         error!("从 TheGraph 查询 token {} 的 V2 交易对失败: {}", token.symbol, e);
+                        //     }
+                        // }
+                        
+                        // 从 TheGraph 查询该 token 相关的 V3 pools
+                        match graph_client.get_v3_pools_by_token(ethereum_address, 25).await {
+                            Ok(v3_pairs) => {
+                                if !v3_pairs.is_empty() {
+                                    info!("Token {} 从 Uniswap V3 获取到 {} 个相关交易对", 
+                                         token.symbol, v3_pairs.len());
+                                    all_pairs.extend(v3_pairs);
                                 }
                             }
                             Err(e) => {
-                                error!("从 TheGraph 查询 token {} 相关交易对失败: {}", token.symbol, e);
+                                error!("从 TheGraph 查询 token {} 的 V3 交易对失败: {}", token.symbol, e);
                             }
+                        }
+                        
+                        // 保存所有交易对到数据库
+                        if !all_pairs.is_empty() {
+                            info!("Token {} 总共获取到 {} 个交易对 (V2 + V3)", 
+                                 token.symbol, all_pairs.len());
+                            
+                            if let Err(e) = pair_manager.save_pairs(&all_pairs) {
+                                error!("保存 token {} 的交易对到数据库失败: {}", token.symbol, e);
+                            } else {
+                                total_pairs_saved += all_pairs.len();
+                                info!("Token {} 的 {} 个交易对已保存到数据库", token.symbol, all_pairs.len());
+                            }
+                        } else {
+                            info!("Token {} 未找到相关交易对", token.symbol);
                         }
                         
                         // 添加延迟以避免请求过于频繁

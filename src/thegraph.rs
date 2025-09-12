@@ -48,8 +48,39 @@ struct GraphQLResponse {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+struct GraphQLV3Response {
+    data: Option<PoolsData>,
+    errors: Option<Vec<GraphQLError>>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
 struct PairsData {
     pairs: Vec<PairData>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct PoolsData {
+    pools: Vec<PoolData>,
+}
+
+// Uniswap V3 Pool data structure
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PoolData {
+    pub id: String,
+    pub token0: TokenInfo,
+    pub token1: TokenInfo,
+    #[serde(rename = "volumeUSD")]
+    pub volume_usd: String,
+    #[serde(rename = "totalValueLockedUSD")]
+    pub total_value_locked_usd: String,
+    #[serde(rename = "txCount")]
+    pub tx_count: String,
+    #[serde(rename = "totalValueLockedToken0")]
+    pub total_value_locked_token0: String,
+    #[serde(rename = "totalValueLockedToken1")]
+    pub total_value_locked_token1: String,
+    #[serde(rename = "feeTier")]
+    pub fee_tier: String,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -68,6 +99,25 @@ pub struct TheGraphClient {
     api_key: Option<String>,
     base_url: String,
     uniswap_v2_subgraph_id: String,
+    uniswap_v3_subgraph_id: String,
+}
+
+// Convert V3 Pool to V2 PairData format for compatibility
+impl From<PoolData> for PairData {
+    fn from(pool: PoolData) -> Self {
+        PairData {
+            id: pool.id,
+            network: "ethereum".to_string(),
+            dex_type: "uniswap_v3".to_string(),
+            token0: pool.token0,
+            token1: pool.token1,
+            volume_usd: pool.volume_usd,
+            reserve_usd: pool.total_value_locked_usd,
+            tx_count: pool.tx_count,
+            reserve0: pool.total_value_locked_token0,
+            reserve1: pool.total_value_locked_token1,
+        }
+    }
 }
 
 impl TheGraphClient {
@@ -75,37 +125,35 @@ impl TheGraphClient {
         let api_key = env::var("THEGRAPH_API_KEY").ok();
         let base_url = env::var("THEGRAPH_BASE_URL").unwrap_or_else(|_| "https://gateway.thegraph.com/api".to_string());
         let uniswap_v2_subgraph_id = env::var("UNISWAP_V2_SUBGRAPH_ID").unwrap_or_else(|_| "A3Np3RQbaBA6oKJgiwDJeo5T3zrYfGHPWFYayMwtNDum".to_string());
+        let uniswap_v3_subgraph_id = env::var("UNISWAP_V3_SUBGRAPH_ID").unwrap_or_else(|_| "5zvR82QoaXYFyDEKLZ9t6v9adgnptxYpKpSbxtgVENFV".to_string());
 
         Self {
             client: reqwest::Client::new(),
             api_key,
             base_url,
             uniswap_v2_subgraph_id,
+            uniswap_v3_subgraph_id,
         }
     }
 
-    /// Get top Uniswap V2 pairs excluding stablecoins
-    pub async fn get_top_pairs(&self, limit: i32) -> Result<Vec<PairData>> {
-        // Try to fetch from TheGraph first, fallback to demo data if failed
-        match self.fetch_pairs_from_graph(limit).await {
-            Ok(pairs) if !pairs.is_empty() => Ok(pairs),
-            _ => {
-                log::warn!("TheGraph API 不可用，使用演示数据");
-                Ok(self.get_demo_pairs(limit))
-            }
-        }
-    }
-
-    /// Fetch pairs from TheGraph API
-    async fn fetch_pairs_from_graph(&self, limit: i32) -> Result<Vec<PairData>> {
+    /// Fetch V3 pools by token from TheGraph API
+    async fn fetch_v3_pools_by_token_from_graph(&self, token_address: &str, limit: i32) -> Result<Vec<PoolData>> {
         let query = r#"
-            query GetTopPairs($first: Int!) {
-                pairs(
+            query GetPoolsByToken($token: String!, $first: Int!) {
+                pools(
                     first: $first,
-                    orderBy: volumeUSD,
+                    orderBy: totalValueLockedUSD,
                     orderDirection: desc,
                     where: {
-                        reserveUSD_gt: "10000"
+                        and: [
+                            {
+                                or: [
+                                    { token0: $token },
+                                    { token1: $token }
+                                ]
+                            },
+                            { totalValueLockedUSD_gt: "1000" }
+                        ]
                     }
                 ) {
                     id
@@ -122,15 +170,17 @@ impl TheGraphClient {
                         decimals
                     }
                     volumeUSD
-                    reserveUSD
+                    totalValueLockedUSD
                     txCount
-                    reserve0
-                    reserve1
+                    totalValueLockedToken0
+                    totalValueLockedToken1
+                    feeTier
                 }
             }
         "#;
 
         let variables = serde_json::json!({
+            "token": token_address.to_lowercase(),
             "first": limit
         });
 
@@ -141,7 +191,7 @@ impl TheGraphClient {
 
         let url = format!(
             "{}/subgraphs/id/{}",
-            self.base_url, self.uniswap_v2_subgraph_id
+            self.base_url, self.uniswap_v3_subgraph_id
         );
         
         let mut request_builder = self.client.post(&url).json(&request);
@@ -154,23 +204,19 @@ impl TheGraphClient {
         let response = request_builder
             .send()
             .await?
-            .json::<GraphQLResponse>()
+            .json::<GraphQLV3Response>()
             .await?;
 
         if let Some(errors) = response.errors {
             return Err(anyhow!("GraphQL errors: {:?}", errors));
         }
 
-        let pairs = response
+        let pools = response
             .data
             .ok_or_else(|| anyhow!("No data in response"))?
-            .pairs;
+            .pools;
 
-        // Filter out stablecoins
-        let filtered_pairs = self.filter_stablecoins(pairs);
-
-        // Limit to requested number
-        Ok(filtered_pairs.into_iter().take(limit as usize).collect())
+        Ok(pools)
     }
 
     /// Filter out stablecoin pairs
@@ -196,6 +242,21 @@ impl TheGraphClient {
     }
 
     /// Get pairs by token address
+    /// Get V3 pools by token address
+    pub async fn get_v3_pools_by_token(&self, token_address: &str, limit: i32) -> Result<Vec<PairData>> {
+        match self.fetch_v3_pools_by_token_from_graph(token_address, limit).await {
+            Ok(pools) if !pools.is_empty() => {
+                // Convert V3 pools to PairData format
+                let pairs: Vec<PairData> = pools.into_iter().map(|pool| pool.into()).collect();
+                Ok(pairs)
+            }
+            _ => {
+                log::warn!("Uniswap V3 TheGraph API 不可用，token: {}", token_address);
+                Ok(vec![])
+            }
+        }
+    }
+
     pub async fn get_pairs_by_token(&self, token_address: &str, limit: i32) -> Result<Vec<PairData>> {
         let query = r#"
             query GetPairsByToken($token: String!, $first: Int!) {
@@ -275,171 +336,11 @@ impl TheGraphClient {
         Ok(filtered_pairs)
     }
 
-    /// Get pair information by address
-    pub async fn get_pair_by_address(&self, pair_address: &str) -> Result<Option<PairData>> {
-        let query = r#"
-            query GetPairByAddress($id: ID!) {
-                pair(id: $id) {
-                    id
-                    token0 {
-                        id
-                        symbol
-                        name
-                        decimals
-                    }
-                    token1 {
-                        id
-                        symbol
-                        name
-                        decimals
-                    }
-                    volumeUSD
-                    reserveUSD
-                    txCount
-                    reserve0
-                    reserve1
-                }
-            }
-        "#;
-
-        let variables = serde_json::json!({
-            "id": pair_address.to_lowercase()
-        });
-
-        let request = GraphQLRequest {
-            query: query.to_string(),
-            variables,
-        };
-
-        let url = format!(
-            "{}/{}",
-            self.base_url, self.uniswap_v2_subgraph_id
-        );
-        
-        let mut request_builder = self.client.post(&url).json(&request);
-        
-        // Add Bearer token if available
-        if let Some(ref api_key) = self.api_key {
-            request_builder = request_builder.header("Authorization", format!("Bearer {}", api_key));
-        }
-        
-        let response = request_builder
-            .send()
-            .await?
-            .json::<serde_json::Value>()
-            .await?;
-
-        if let Some(errors) = response.get("errors") {
-            return Err(anyhow!("GraphQL errors: {:?}", errors));
-        }
-
-        let pair_data = response
-            .get("data")
-            .and_then(|data| data.get("pair"))
-            .and_then(|pair| serde_json::from_value(pair.clone()).ok());
-
-        Ok(pair_data)
-    }
-
-    /// Generate demo pairs for testing when TheGraph API is unavailable
-    fn get_demo_pairs(&self, limit: i32) -> Vec<PairData> {
-        let demo_pairs = vec![
-            PairData {
-                id: "0xa478c2975ab1ea89e8196811f51a7b7ade33eb11".to_string(),
-                network: "ethereum".to_string(),
-                dex_type: "uniswap_v2".to_string(),
-                token0: TokenInfo {
-                    id: "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2".to_string(),
-                    symbol: "WETH".to_string(),
-                    name: "Wrapped Ether".to_string(),
-                    decimals: "18".to_string(),
-                },
-                token1: TokenInfo {
-                    id: "0xdac17f958d2ee523a2206206994597c13d831ec7".to_string(),
-                    symbol: "USDT".to_string(),
-                    name: "Tether USD".to_string(),
-                    decimals: "6".to_string(),
-                },
-                volume_usd: "50000000".to_string(),
-                reserve_usd: "200000000".to_string(),
-                tx_count: "5000".to_string(),
-                reserve0: "50000000000000000000000".to_string(), // 50,000 WETH
-                reserve1: "100000000000".to_string(), // 100,000 USDT
-            },
-            PairData {
-                id: "0xb4e16d0168e52d35cacd2c6185b44281ec28c9dc".to_string(),
-                network: "ethereum".to_string(),
-                dex_type: "uniswap_v2".to_string(),
-                token0: TokenInfo {
-                    id: "0xa0b86a33e6180d93c6e6b3d3d4dae2c6b5b8b8b8".to_string(),
-                    symbol: "WETH".to_string(),
-                    name: "Wrapped Ether".to_string(),
-                    decimals: "18".to_string(),
-                },
-                token1: TokenInfo {
-                    id: "0x1f9840a85d5af5bf1d1762f925bdaddc4201f984".to_string(),
-                    symbol: "UNI".to_string(),
-                    name: "Uniswap".to_string(),
-                    decimals: "18".to_string(),
-                },
-                volume_usd: "30000000".to_string(),
-                reserve_usd: "150000000".to_string(),
-                tx_count: "3000".to_string(),
-                reserve0: "30000000000000000000000".to_string(), // 30,000 WETH
-                reserve1: "1500000000000000000000000".to_string(), // 1,500,000 UNI
-            },
-            PairData {
-                id: "0xd3d2e2692501a5c9ca623199d38826e513033a17".to_string(),
-                network: "ethereum".to_string(),
-                dex_type: "uniswap_v2".to_string(),
-                token0: TokenInfo {
-                    id: "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2".to_string(),
-                    symbol: "WETH".to_string(),
-                    name: "Wrapped Ether".to_string(),
-                    decimals: "18".to_string(),
-                },
-                token1: TokenInfo {
-                    id: "0x514910771af9ca656af840dff83e8264ecf986ca".to_string(),
-                    symbol: "LINK".to_string(),
-                    name: "ChainLink Token".to_string(),
-                    decimals: "18".to_string(),
-                },
-                volume_usd: "25000000".to_string(),
-                reserve_usd: "120000000".to_string(),
-                tx_count: "2500".to_string(),
-                reserve0: "25000000000000000000000".to_string(), // 25,000 WETH
-                reserve1: "2000000000000000000000000".to_string(), // 2,000,000 LINK
-            },
-        ];
-
-        // Filter out stablecoins and limit results
-        let filtered = self.filter_stablecoins(demo_pairs);
-        filtered.into_iter().take(limit as usize).collect()
-    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[tokio::test]
-    async fn test_get_top_pairs() {
-        let client = TheGraphClient::new();
-        let result = client.get_top_pairs(10).await;
-
-        match result {
-            Ok(pairs) => {
-                println!("Found {} pairs", pairs.len());
-                for pair in pairs.iter().take(3) {
-                    println!(
-                        "Pair: {} - {}/{}",
-                        pair.id, pair.token0.symbol, pair.token1.symbol
-                    );
-                }
-            }
-            Err(e) => println!("Error: {:?}", e),
-        }
-    }
 
     #[test]
     fn test_stablecoin_filter() {
