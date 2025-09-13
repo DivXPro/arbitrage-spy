@@ -133,6 +133,7 @@ mod tests {
             tx_count: "1000".to_string(),
             reserve0: "1000000000000000000000".to_string(), // 1000 WETH (18 decimals)
             reserve1: "2000000000000".to_string(), // 2,000,000 USDT (6 decimals)
+            fee_tier: "3000".to_string(),
         };
         
         let price = PriceCalculator::calculate_price(&pair.reserve0, &pair.reserve1).unwrap();
@@ -170,6 +171,7 @@ mod tests {
             tx_count: "1000".to_string(),
             reserve0: "1000000000000000000000".to_string(),
             reserve1: "2000000000000".to_string(),
+            fee_tier: "3000".to_string(),
         };
         
         assert!(PriceCalculator::has_valid_reserves(&valid_pair));

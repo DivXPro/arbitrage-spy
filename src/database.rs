@@ -107,6 +107,10 @@ impl Database {
             "ALTER TABLE pairs ADD COLUMN reserve1 TEXT NOT NULL DEFAULT '0'",
             [],
         );
+        let _ = binding.execute(
+            "ALTER TABLE pairs ADD COLUMN fee_tier TEXT NOT NULL DEFAULT '3000'",
+            [],
+        );
 
         info!("数据库表初始化完成");
         Ok(())
@@ -335,8 +339,8 @@ impl Database {
                 id, network, dex_type,
                 token0_id, token0_symbol, token0_name, token0_decimals,
                 token1_id, token1_symbol, token1_name, token1_decimals,
-                volume_usd, reserve_usd, tx_count, reserve0, reserve1
-            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16)
+                volume_usd, reserve_usd, tx_count, reserve0, reserve1, fee_tier
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17)
                 "#,
             )?;
 
@@ -358,6 +362,7 @@ impl Database {
                 &pair.tx_count,
                 &pair.reserve0,
                 &pair.reserve1,
+                &pair.fee_tier,
                  ])?;
             }
         }
@@ -377,7 +382,7 @@ impl Database {
             r#"
             SELECT id, network, dex_type, token0_id, token0_symbol, token0_name, token0_decimals,
                    token1_id, token1_symbol, token1_name, token1_decimals,
-                   volume_usd, reserve_usd, tx_count, reserve0, reserve1
+                   volume_usd, reserve_usd, tx_count, reserve0, reserve1, fee_tier
             FROM pairs
             "#,
         )?;
@@ -404,6 +409,7 @@ impl Database {
                 tx_count: row.get(13)?,
                 reserve0: row.get(14)?,
                 reserve1: row.get(15)?,
+                fee_tier: row.get(16)?,
             })
         })?;
 
@@ -428,7 +434,7 @@ impl Database {
             r#"
             SELECT id, network, dex_type, token0_id, token0_symbol, token0_name, token0_decimals,
                    token1_id, token1_symbol, token1_name, token1_decimals,
-                   volume_usd, reserve_usd, tx_count, reserve0, reserve1
+                   volume_usd, reserve_usd, tx_count, reserve0, reserve1, fee_tier
             FROM pairs
             "#,
         );
@@ -481,6 +487,7 @@ impl Database {
                 tx_count: row.get(13)?,
                 reserve0: row.get(14)?,
                 reserve1: row.get(15)?,
+                fee_tier: row.get(16)?,
             })
         })?;
 
@@ -501,7 +508,7 @@ impl Database {
             r#"
             SELECT id, network, dex_type, token0_id, token0_symbol, token0_name, token0_decimals,
                    token1_id, token1_symbol, token1_name, token1_decimals,
-                   volume_usd, reserve_usd, tx_count, reserve0, reserve1
+                   volume_usd, reserve_usd, tx_count, reserve0, reserve1, fee_tier
             FROM pairs
             WHERE id = ?
             "#,
@@ -529,6 +536,7 @@ impl Database {
                 tx_count: row.get(13)?,
                 reserve0: row.get(14)?,
                 reserve1: row.get(15)?,
+                fee_tier: row.get(16)?,
             })
         })?;
 

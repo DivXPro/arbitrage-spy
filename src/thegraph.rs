@@ -23,6 +23,8 @@ pub struct PairData {
     pub reserve0: String,
     #[serde(rename = "reserve1")]
     pub reserve1: String,
+    #[serde(rename = "feeTier", default = "default_fee_tier")]
+    pub fee_tier: String,
 }
 
 fn default_network() -> String {
@@ -31,6 +33,10 @@ fn default_network() -> String {
 
 fn default_dex_type() -> String {
     "uniswap_v2".to_string()
+}
+
+fn default_fee_tier() -> String {
+    "3000".to_string()  // Default to 0.3% fee for V2 pairs
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -116,6 +122,7 @@ impl From<PoolData> for PairData {
             tx_count: pool.tx_count,
             reserve0: pool.total_value_locked_token0,
             reserve1: pool.total_value_locked_token1,
+            fee_tier: pool.fee_tier,
         }
     }
 }
@@ -367,6 +374,7 @@ mod tests {
                 tx_count: "1000".to_string(),
                 reserve0: "1000000000000000000000".to_string(),
                 reserve1: "2000000000".to_string(),
+                fee_tier: "3000".to_string(),
             },
             PairData {
                 id: "0x2".to_string(),
@@ -389,6 +397,7 @@ mod tests {
                 tx_count: "800".to_string(),
                 reserve0: "800000000000000000000".to_string(),
                 reserve1: "1000000000000000000000000".to_string(),
+                fee_tier: "3000".to_string(),
             },
         ];
 

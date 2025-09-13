@@ -247,6 +247,7 @@ mod tests {
             tx_count: "1000".to_string(),
             reserve0: "1000000".to_string(),
             reserve1: "5000000".to_string(),
+            fee_tier: "3000".to_string(),
         }
     }
 }
