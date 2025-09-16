@@ -11,6 +11,8 @@ pub struct PairData {
     pub network: String,
     #[serde(default = "default_dex_type")]
     pub dex_type: String,
+    #[serde(default = "default_protocol_type")]
+    pub protocol_type: String,
     pub token0: TokenInfo,
     pub token1: TokenInfo,
     #[serde(rename = "volumeUSD")]
@@ -25,6 +27,8 @@ pub struct PairData {
     pub reserve1: String,
     #[serde(rename = "feeTier", default = "default_fee_tier")]
     pub fee_tier: String,
+    pub sqrt_price: Option<String>,
+    pub tick: Option<String>,
 }
 
 fn default_network() -> String {
@@ -37,6 +41,10 @@ fn default_dex_type() -> String {
 
 fn default_fee_tier() -> String {
     "3000".to_string()  // Default to 0.3% fee for V2 pairs
+}
+
+fn default_protocol_type() -> String {
+    "amm_v2".to_string()  // Default to AMM V2 protocol
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -87,6 +95,9 @@ pub struct PoolData {
     pub total_value_locked_token1: String,
     #[serde(rename = "feeTier")]
     pub fee_tier: String,
+    #[serde(rename = "sqrtPrice")]
+    pub sqrt_price: Option<String>,
+    pub tick: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -115,6 +126,7 @@ impl From<PoolData> for PairData {
             id: pool.id,
             network: "ethereum".to_string(),
             dex_type: "uniswap_v3".to_string(),
+            protocol_type: "amm_v3".to_string(),
             token0: pool.token0,
             token1: pool.token1,
             volume_usd: pool.volume_usd,
@@ -123,6 +135,8 @@ impl From<PoolData> for PairData {
             reserve0: pool.total_value_locked_token0,
             reserve1: pool.total_value_locked_token1,
             fee_tier: pool.fee_tier,
+            sqrt_price: pool.sqrt_price,
+            tick: pool.tick,
         }
     }
 }
@@ -182,6 +196,8 @@ impl TheGraphClient {
                     totalValueLockedToken0
                     totalValueLockedToken1
                     feeTier
+                    sqrtPrice
+                    tick
                 }
             }
         "#;
@@ -357,6 +373,7 @@ mod tests {
                 id: "0x1".to_string(),
                 network: "ethereum".to_string(),
                 dex_type: "uniswap_v2".to_string(),
+                protocol_type: "amm_v2".to_string(),
                 token0: TokenInfo {
                     id: "0xa".to_string(),
                     symbol: "WETH".to_string(),
@@ -375,11 +392,14 @@ mod tests {
                 reserve0: "1000000000000000000000".to_string(),
                 reserve1: "2000000000".to_string(),
                 fee_tier: "3000".to_string(),
+                sqrt_price: None,
+                tick: None,
             },
             PairData {
                 id: "0x2".to_string(),
                 network: "ethereum".to_string(),
                 dex_type: "uniswap_v2".to_string(),
+                protocol_type: "amm_v2".to_string(),
                 token0: TokenInfo {
                     id: "0xc".to_string(),
                     symbol: "WETH".to_string(),
@@ -398,6 +418,8 @@ mod tests {
                 reserve0: "800000000000000000000".to_string(),
                 reserve1: "1000000000000000000000000".to_string(),
                 fee_tier: "3000".to_string(),
+                sqrt_price: None,
+                tick: None,
             },
         ];
 

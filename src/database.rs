@@ -1,5 +1,6 @@
 use crate::token::{Token, TokenList, TokenManager};
 use crate::thegraph::PairData;
+use crate::utils::convert_decimal_to_integer_string;
 use anyhow::Result;
 use log::info;
 use rusqlite::{params, Connection};
@@ -77,6 +78,7 @@ impl Database {
                 id TEXT PRIMARY KEY,
                 network TEXT NOT NULL DEFAULT 'ethereum',
                 dex_type TEXT NOT NULL DEFAULT 'uniswap_v2',
+                protocol_type TEXT NOT NULL DEFAULT 'amm_v2',
                 token0_id TEXT NOT NULL,
                 token0_symbol TEXT NOT NULL,
                 token0_name TEXT NOT NULL,
@@ -90,27 +92,15 @@ impl Database {
                 tx_count TEXT NOT NULL,
                 reserve0 TEXT NOT NULL DEFAULT '0',
                 reserve1 TEXT NOT NULL DEFAULT '0',
+                fee_tier TEXT NOT NULL DEFAULT '3000',
+                sqrt_price TEXT,
+                tick TEXT,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
             )
             "#,
             [],
         )?;
-
-        // 添加新列（如果不存在）
-        let binding = self.conn.lock().unwrap();
-        let _ = binding.execute(
-            "ALTER TABLE pairs ADD COLUMN reserve0 TEXT NOT NULL DEFAULT '0'",
-            [],
-        );
-        let _ = binding.execute(
-            "ALTER TABLE pairs ADD COLUMN reserve1 TEXT NOT NULL DEFAULT '0'",
-            [],
-        );
-        let _ = binding.execute(
-            "ALTER TABLE pairs ADD COLUMN fee_tier TEXT NOT NULL DEFAULT '3000'",
-            [],
-        );
 
         info!("数据库表初始化完成");
         Ok(())
@@ -336,19 +326,28 @@ impl Database {
             let mut stmt = tx.prepare(
                 r#"
                 INSERT OR REPLACE INTO pairs (
-                id, network, dex_type,
+                id, network, dex_type, protocol_type,
                 token0_id, token0_symbol, token0_name, token0_decimals,
                 token1_id, token1_symbol, token1_name, token1_decimals,
-                volume_usd, reserve_usd, tx_count, reserve0, reserve1, fee_tier
-            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17)
+                volume_usd, reserve_usd, tx_count, reserve0, reserve1, fee_tier, sqrt_price, tick
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20)
                 "#,
             )?;
 
             for pair in pairs {
+                // 将reserve字段从带小数点的字符串转换为整数型字符串
+                let reserve_usd_int = convert_decimal_to_integer_string(&pair.reserve_usd)
+                    .unwrap_or_else(|_| "0".to_string());
+                let reserve0_int = convert_decimal_to_integer_string(&pair.reserve0)
+                    .unwrap_or_else(|_| "0".to_string());
+                let reserve1_int = convert_decimal_to_integer_string(&pair.reserve1)
+                    .unwrap_or_else(|_| "0".to_string());
+                
                 stmt.execute(params![
                     &pair.id,
                     &pair.network,
                     &pair.dex_type,
+                    "amm_v2", // default protocol_type
                     &pair.token0.id,
                     &pair.token0.symbol,
                     &pair.token0.name,
@@ -358,11 +357,13 @@ impl Database {
                     &pair.token1.name,
                     &pair.token1.decimals,
                     &pair.volume_usd,
-                &pair.reserve_usd,
-                &pair.tx_count,
-                &pair.reserve0,
-                &pair.reserve1,
-                &pair.fee_tier,
+                    &reserve_usd_int,
+                    &pair.tx_count,
+                    &reserve0_int,
+                    &reserve1_int,
+                    &pair.fee_tier,
+                    &pair.sqrt_price,
+                    &pair.tick,
                  ])?;
             }
         }
@@ -380,9 +381,9 @@ impl Database {
         let binding = self.conn.lock().unwrap();
         let mut stmt = binding.prepare(
             r#"
-            SELECT id, network, dex_type, token0_id, token0_symbol, token0_name, token0_decimals,
+            SELECT id, network, dex_type, protocol_type, token0_id, token0_symbol, token0_name, token0_decimals,
                    token1_id, token1_symbol, token1_name, token1_decimals,
-                   volume_usd, reserve_usd, tx_count, reserve0, reserve1, fee_tier
+                   volume_usd, reserve_usd, tx_count, reserve0, reserve1, fee_tier, sqrt_price, tick
             FROM pairs
             "#,
         )?;
@@ -392,24 +393,27 @@ impl Database {
                 id: row.get(0)?,
                 network: row.get(1)?,
                 dex_type: row.get(2)?,
+                protocol_type: row.get(3)?,
                 token0: TokenInfo {
-                    id: row.get(3)?,
-                    symbol: row.get(4)?,
-                    name: row.get(5)?,
-                    decimals: row.get(6)?,
+                    id: row.get(4)?,
+                    symbol: row.get(5)?,
+                    name: row.get(6)?,
+                    decimals: row.get(7)?,
                 },
                 token1: TokenInfo {
-                    id: row.get(7)?,
-                    symbol: row.get(8)?,
-                    name: row.get(9)?,
-                    decimals: row.get(10)?,
+                    id: row.get(8)?,
+                    symbol: row.get(9)?,
+                    name: row.get(10)?,
+                    decimals: row.get(11)?,
                 },
-                volume_usd: row.get(11)?,
-                reserve_usd: row.get(12)?,
-                tx_count: row.get(13)?,
-                reserve0: row.get(14)?,
-                reserve1: row.get(15)?,
-                fee_tier: row.get(16)?,
+                volume_usd: row.get(12)?,
+                reserve_usd: row.get(13)?,
+                tx_count: row.get(14)?,
+                reserve0: row.get(15)?,
+                reserve1: row.get(16)?,
+                fee_tier: row.get(17)?,
+                sqrt_price: row.get(18)?,
+                tick: row.get(19)?,
             })
         })?;
 
@@ -432,9 +436,9 @@ impl Database {
         
         let mut query = String::from(
             r#"
-            SELECT id, network, dex_type, token0_id, token0_symbol, token0_name, token0_decimals,
+            SELECT id, network, dex_type, protocol_type, token0_id, token0_symbol, token0_name, token0_decimals,
                    token1_id, token1_symbol, token1_name, token1_decimals,
-                   volume_usd, reserve_usd, tx_count, reserve0, reserve1, fee_tier
+                   volume_usd, reserve_usd, tx_count, reserve0, reserve1, fee_tier, sqrt_price, tick
             FROM pairs
             "#,
         );
@@ -470,24 +474,27 @@ impl Database {
                 id: row.get(0)?,
                 network: row.get(1)?,
                 dex_type: row.get(2)?,
+                protocol_type: row.get(3)?,
                 token0: TokenInfo {
-                    id: row.get(3)?,
-                    symbol: row.get(4)?,
-                    name: row.get(5)?,
-                    decimals: row.get(6)?,
+                    id: row.get(4)?,
+                    symbol: row.get(5)?,
+                    name: row.get(6)?,
+                    decimals: row.get(7)?,
                 },
                 token1: TokenInfo {
-                    id: row.get(7)?,
-                    symbol: row.get(8)?,
-                    name: row.get(9)?,
-                    decimals: row.get(10)?,
+                    id: row.get(8)?,
+                    symbol: row.get(9)?,
+                    name: row.get(10)?,
+                    decimals: row.get(11)?,
                 },
-                volume_usd: row.get(11)?,
-                reserve_usd: row.get(12)?,
-                tx_count: row.get(13)?,
-                reserve0: row.get(14)?,
-                reserve1: row.get(15)?,
-                fee_tier: row.get(16)?,
+                volume_usd: row.get(12)?,
+                reserve_usd: row.get(13)?,
+                tx_count: row.get(14)?,
+                reserve0: row.get(15)?,
+                reserve1: row.get(16)?,
+                fee_tier: row.get(17)?,
+                sqrt_price: row.get(18)?,
+                tick: row.get(19)?,
             })
         })?;
 
@@ -506,9 +513,9 @@ impl Database {
         let binding = self.conn.lock().unwrap();
         let mut stmt = binding.prepare(
             r#"
-            SELECT id, network, dex_type, token0_id, token0_symbol, token0_name, token0_decimals,
+            SELECT id, network, dex_type, protocol_type, token0_id, token0_symbol, token0_name, token0_decimals,
                    token1_id, token1_symbol, token1_name, token1_decimals,
-                   volume_usd, reserve_usd, tx_count, reserve0, reserve1, fee_tier
+                   volume_usd, reserve_usd, tx_count, reserve0, reserve1, fee_tier, sqrt_price, tick
             FROM pairs
             WHERE id = ?
             "#,
@@ -519,24 +526,27 @@ impl Database {
                 id: row.get(0)?,
                 network: row.get(1)?,
                 dex_type: row.get(2)?,
+                protocol_type: row.get(3)?,
                 token0: TokenInfo {
-                    id: row.get(3)?,
-                    symbol: row.get(4)?,
-                    name: row.get(5)?,
-                    decimals: row.get(6)?,
+                    id: row.get(4)?,
+                    symbol: row.get(5)?,
+                    name: row.get(6)?,
+                    decimals: row.get(7)?,
                 },
                 token1: TokenInfo {
-                    id: row.get(7)?,
-                    symbol: row.get(8)?,
-                    name: row.get(9)?,
-                    decimals: row.get(10)?,
+                    id: row.get(8)?,
+                    symbol: row.get(9)?,
+                    name: row.get(10)?,
+                    decimals: row.get(11)?,
                 },
-                volume_usd: row.get(11)?,
-                reserve_usd: row.get(12)?,
-                tx_count: row.get(13)?,
-                reserve0: row.get(14)?,
-                reserve1: row.get(15)?,
-                fee_tier: row.get(16)?,
+                volume_usd: row.get(12)?,
+                reserve_usd: row.get(13)?,
+                tx_count: row.get(14)?,
+                reserve0: row.get(15)?,
+                reserve1: row.get(16)?,
+                fee_tier: row.get(17)?,
+                sqrt_price: row.get(18)?,
+                tick: row.get(19)?,
             })
         })?;
 
@@ -573,4 +583,57 @@ impl Database {
     }
 
 
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::thegraph::{PairData, TokenInfo};
+
+    #[test]
+    fn test_save_pairs_with_decimal_reserves() {
+        // 创建临时数据库
+        let db = Database::new(Some(":memory:")).unwrap();
+        
+        // 创建测试数据，包含带小数点的reserve字段
+        let test_pair = PairData {
+            id: "test_pair_1".to_string(),
+            network: "ethereum".to_string(),
+            dex_type: "uniswap_v2".to_string(),
+            protocol_type: "amm_v2".to_string(),
+            token0: TokenInfo {
+                id: "token0_id".to_string(),
+                symbol: "TOKEN0".to_string(),
+                name: "Token 0".to_string(),
+                decimals: "18".to_string(),
+            },
+            token1: TokenInfo {
+                id: "token1_id".to_string(),
+                symbol: "TOKEN1".to_string(),
+                name: "Token 1".to_string(),
+                decimals: "6".to_string(),
+            },
+            volume_usd: "1000000.5".to_string(),
+            reserve_usd: "5000000.123456".to_string(), // 带小数点
+            tx_count: "100".to_string(),
+            reserve0: "1234567.890123".to_string(), // 带小数点
+            reserve1: "9876543.210987".to_string(), // 带小数点
+            fee_tier: "3000".to_string(),
+            sqrt_price: None,
+            tick: None,
+        };
+
+        // 保存数据
+        db.save_pairs(&[test_pair]).unwrap();
+
+        // 验证数据是否正确保存（reserve字段应该被转换为整数）
+        let saved_pairs = db.load_pairs().unwrap();
+        assert_eq!(saved_pairs.len(), 1);
+        
+        let saved_pair = &saved_pairs[0];
+        assert_eq!(saved_pair.id, "test_pair_1");
+        assert_eq!(saved_pair.reserve_usd, "5000000123456"); // 保留所有数字
+        assert_eq!(saved_pair.reserve0, "1234567890123"); // 保留所有数字
+        assert_eq!(saved_pair.reserve1, "9876543210987"); // 保留所有数字
+    }
 }

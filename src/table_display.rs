@@ -48,13 +48,9 @@ pub struct PairDisplayConverter;
 impl PairDisplayConverter {
     /// 将单个PairData转换为PairDisplay
     pub fn convert_single(pair: &PairData, rank: usize) -> PairDisplay {
-        let price = if PriceCalculator::has_valid_reserves(pair) {
-            match PriceCalculator::calculate_price(&pair.reserve0, &pair.reserve1) {
-                Ok(price_value) => PriceCalculator::format_price(&price_value),
-                Err(_) => "$0.000000".to_string(),
-            }
-        } else {
-            "$0.000000".to_string()
+        let price = match PriceCalculator::calculate_price_from_pair(pair) {
+            Ok(price_value) => PriceCalculator::format_price(&price_value),
+            Err(_) => "$0.000000".to_string(),
         };
         
         PairDisplay {
@@ -91,9 +87,9 @@ impl PairDisplayConverter {
     
     /// 为事件处理创建PairDisplay（使用自定义错误处理）
     pub fn convert_for_event(pair: &PairData, rank: usize) -> PairDisplay {
-        let price = match PriceCalculator::calculate_price(&pair.reserve0, &pair.reserve1) {
-            Ok(price) => PriceCalculator::format_price(&price),
-            Err(_) => "_".to_string(),
+        let price = match PriceCalculator::calculate_price_from_pair(pair) {
+            Ok(price_value) => PriceCalculator::format_price(&price_value),
+            Err(_) => "$0.000000".to_string(),
         };
         
         PairDisplay {

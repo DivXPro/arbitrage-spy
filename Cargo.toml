@@ -74,9 +74,7 @@ path = "src/lib.rs"
 name = "arbitrage-spy"
 path = "src/main.rs"
 
-[[example]]
-name = "token_demo"
-path = "examples/token_demo.rs"
+
 
 [profile.release]
 opt-level = 3

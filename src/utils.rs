@@ -126,6 +126,64 @@ pub fn format_big_number(number: &BigDecimal, decimals: usize) -> String {
     rounded.to_string()
 }
 
+/// 将带小数点的reserve字符串转换为整数型字符串
+/// 将浮点数转换为uint格式，移除小数点但保留所有数字
+/// 例如: "123.45" -> "12345", "0.001" -> "1", "1000" -> "1000"
+pub fn convert_decimal_to_integer_string(decimal_str: &str) -> Result<String> {
+    if decimal_str.is_empty() {
+        return Ok("0".to_string());
+    }
+    
+    // 移除前导和尾随空格
+    let trimmed = decimal_str.trim();
+    
+    // 如果是"0"或"0.0"等，直接返回"0"
+    if let Ok(val) = trimmed.parse::<f64>() {
+        if val == 0.0 {
+            return Ok("0".to_string());
+        }
+    }
+    
+    // 分割整数部分和小数部分
+    let parts: Vec<&str> = trimmed.split('.').collect();
+    let integer_part = parts[0];
+    let decimal_part = if parts.len() > 1 { parts[1] } else { "" };
+    
+    // 处理整数部分：移除前导零
+    let mut integer_clean = integer_part.trim_start_matches('0');
+    if integer_clean.is_empty() || integer_clean == "-" {
+        integer_clean = "0";
+    }
+    
+    // 处理小数部分：移除尾随零
+     let decimal_clean = decimal_part.trim_end_matches('0');
+     
+     // 组合结果
+     let mut result = String::new();
+     
+     // 添加整数部分
+     if integer_clean == "0" && !decimal_clean.is_empty() {
+         // 如果整数部分是0且有小数部分，不添加0
+     } else {
+         result.push_str(integer_clean);
+     }
+     
+     // 添加小数部分（移除前导零）
+     if !decimal_clean.is_empty() {
+         let decimal_no_leading_zeros = decimal_clean.trim_start_matches('0');
+         if !decimal_no_leading_zeros.is_empty() {
+             result.push_str(decimal_no_leading_zeros);
+         }
+     }
+    
+    // 最终检查：如果结果为空，返回"0"
+    if result.is_empty() {
+        return Ok("0".to_string());
+    }
+    
+    Ok(result)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -153,5 +211,45 @@ mod tests {
         assert!(is_valid_ethereum_address("0x742d35Cc6634C0532925a3b8D4C9db4C4C4C4C4C"));
         assert!(!is_valid_ethereum_address("0x742d35Cc6634C0532925a3b8D4C9db4C4C4C4C4"));
         assert!(!is_valid_ethereum_address("742d35Cc6634C0532925a3b8D4C9db4C4C4C4C4C"));
+    }
+    
+    #[test]
+    fn test_convert_decimal_to_integer_string() {
+        // 测试基本的小数转换 - 保留所有数字
+        assert_eq!(convert_decimal_to_integer_string("123.456").unwrap(), "123456");
+        assert_eq!(convert_decimal_to_integer_string("123.45").unwrap(), "12345");
+        assert_eq!(convert_decimal_to_integer_string("123.33").unwrap(), "12333");
+        
+        // 测试整数
+        assert_eq!(convert_decimal_to_integer_string("1000").unwrap(), "1000");
+        assert_eq!(convert_decimal_to_integer_string("1000.0").unwrap(), "1000");
+        
+        // 测试小数
+        assert_eq!(convert_decimal_to_integer_string("0.999").unwrap(), "999");
+        assert_eq!(convert_decimal_to_integer_string("0.001").unwrap(), "1");
+        assert_eq!(convert_decimal_to_integer_string("0.123").unwrap(), "123");
+        
+        // 测试大数字
+        assert_eq!(convert_decimal_to_integer_string("1234567890123456789.123").unwrap(), "1234567890123456789123");
+        
+        // 测试边界情况
+        assert_eq!(convert_decimal_to_integer_string("0").unwrap(), "0");
+        assert_eq!(convert_decimal_to_integer_string("0.0").unwrap(), "0");
+        assert_eq!(convert_decimal_to_integer_string("0.000").unwrap(), "0");
+        assert_eq!(convert_decimal_to_integer_string("").unwrap(), "0");
+        
+        // 测试前导零
+        assert_eq!(convert_decimal_to_integer_string("000123.456").unwrap(), "123456");
+        assert_eq!(convert_decimal_to_integer_string("0.00123").unwrap(), "123");
+        
+        // 测试尾随零
+        assert_eq!(convert_decimal_to_integer_string("123.4500").unwrap(), "12345");
+        assert_eq!(convert_decimal_to_integer_string("123.000").unwrap(), "123");
+        
+        // 测试整数（无小数点）
+        assert_eq!(convert_decimal_to_integer_string("12345").unwrap(), "12345");
+        
+        // 测试带空格
+        assert_eq!(convert_decimal_to_integer_string(" 123.45 ").unwrap(), "12345");
     }
 }

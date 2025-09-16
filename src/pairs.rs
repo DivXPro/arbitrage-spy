@@ -230,6 +230,7 @@ mod tests {
             id: "0x123".to_string(),
             network: "ethereum".to_string(),
             dex_type: "uniswap_v2".to_string(),
+            protocol_type: "amm_v2".to_string(),
             token0: TokenInfo {
                 id: "0xA0b86a33E6441E6C7D3E4C2C4C6C6C6C6C6C6C6C".to_string(),
                 symbol: "USDC".to_string(),
@@ -248,6 +249,8 @@ mod tests {
             reserve0: "1000000".to_string(),
             reserve1: "5000000".to_string(),
             fee_tier: "3000".to_string(),
+            sqrt_price: None,
+            tick: None,
         }
     }
 }
