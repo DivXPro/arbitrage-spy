@@ -366,7 +366,7 @@ mod tests {
         let pair = PairData {
             id: "test".to_string(),
             network: "ethereum".to_string(),
-            dex_type: "uniswap_v3".to_string(),
+            dex_type: "UNI_V3".to_string(),
             protocol_type: "amm_v3".to_string(),
             token0: TokenInfo {
                  id: "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2".to_string(), // WETH
@@ -403,7 +403,7 @@ mod tests {
         let pair = PairData {
             id: "test".to_string(),
             network: "ethereum".to_string(),
-            dex_type: "uniswap_v3".to_string(),
+            dex_type: "UNI_V3".to_string(),
             protocol_type: "amm_v3".to_string(),
             token0: TokenInfo {
                  id: "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2".to_string(), // WETH
@@ -440,7 +440,7 @@ mod tests {
         let pair = PairData {
             id: "test".to_string(),
             network: "ethereum".to_string(),
-            dex_type: "uniswap_v3".to_string(),
+            dex_type: "UNI_V3".to_string(),
             protocol_type: "amm_v3".to_string(),
             token0: TokenInfo {
                 id: "token0".to_string(),
@@ -508,7 +508,7 @@ mod tests {
         let pair = PairData {
             id: "test".to_string(),
             network: "ethereum".to_string(),
-            dex_type: "uniswap_v3".to_string(),
+            dex_type: "UNI_V3".to_string(),
             protocol_type: "amm_v3".to_string(),
             token0: TokenInfo {
                 id: "token0".to_string(),

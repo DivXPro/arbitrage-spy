@@ -125,7 +125,7 @@ impl From<PoolData> for PairData {
         PairData {
             id: pool.id,
             network: "ethereum".to_string(),
-            dex_type: "uniswap_v3".to_string(),
+            dex_type: "UNI_V3".to_string(),
             protocol_type: "amm_v3".to_string(),
             token0: pool.token0,
             token1: pool.token1,

@@ -144,7 +144,7 @@ impl PairManager {
 
     /// 获取支持的DEX类型列表 - 业务方法
     pub fn get_supported_dex_types(&self) -> Vec<&'static str> {
-        vec!["uniswap_v2", "uniswap_v3", "sushiswap", "pancakeswap"]
+        vec!["UNI_V2", "UNI_V3", "sushiswap", "pancakeswap"]
     }
 
     /// 检查网络是否支持 - 业务方法

@@ -599,7 +599,7 @@ mod tests {
         let test_pair = PairData {
             id: "test_pair_1".to_string(),
             network: "ethereum".to_string(),
-            dex_type: "uniswap_v2".to_string(),
+            dex_type: "UNI_V2".to_string(),
             protocol_type: "amm_v2".to_string(),
             token0: TokenInfo {
                 id: "token0_id".to_string(),
