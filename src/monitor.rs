@@ -8,7 +8,7 @@ use std::time::Duration;
 use tabled::{settings::Style, Table};
 use tokio::time;
 
-use crate::config::Config;
+use crate::config::{Config, dex_types};
 use crate::dex::balancer::BalancerProvider;
 use crate::dex::curve::CurveProvider;
 use crate::dex::pancakeswap::PancakeSwapProvider;
@@ -35,7 +35,7 @@ impl ArbitrageMonitor {
 
             info!("正在初始化 DEX 提供者: {}", dex_name);
             let provider: Box<dyn DexProvider + Send + Sync> = match dex_name.as_str() {
-                "uniswap_v2" => {
+                dex_types::UNISWAP_V2 => {
                     info!("创建 Uniswap V2 提供者");
                     Box::new(UniswapProvider::new(dex_config.clone()))
                 }

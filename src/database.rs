@@ -1,6 +1,8 @@
 use crate::token::{Token, TokenList, TokenManager};
 use crate::thegraph::PairData;
 use crate::utils::convert_decimal_to_integer_string;
+use crate::types::TokenPair;
+use crate::config::{protocol_types, dex_types};
 use anyhow::Result;
 use log::info;
 use rusqlite::{params, Connection};
@@ -347,7 +349,7 @@ impl Database {
                     &pair.id,
                     &pair.network,
                     &pair.dex_type,
-                    "amm_v2", // default protocol_type
+                    &pair.protocol_type, // 使用实际的protocol_type
                     &pair.token0.id,
                     &pair.token0.symbol,
                     &pair.token0.name,
@@ -506,6 +508,90 @@ impl Database {
         Ok(pairs)
     }
 
+    /// 按价值（reserve_usd）降序获取交易对
+    pub fn load_pairs_by_value(
+        &self,
+        network: Option<&str>,
+        dex_type: Option<&str>,
+        limit: Option<usize>,
+    ) -> Result<Vec<PairData>> {
+        use crate::thegraph::TokenInfo;
+        
+        let mut query = String::from(
+            r#"
+            SELECT id, network, dex_type, protocol_type, token0_id, token0_symbol, token0_name, token0_decimals,
+                   token1_id, token1_symbol, token1_name, token1_decimals,
+                   volume_usd, reserve_usd, tx_count, reserve0, reserve1, fee_tier, sqrt_price, tick
+            FROM pairs
+            "#,
+        );
+
+        let mut conditions = Vec::new();
+        let mut params_vec = Vec::new();
+
+        if let Some(net) = network {
+            conditions.push("network = ?");
+            params_vec.push(net);
+        }
+
+        if let Some(dex) = dex_type {
+            conditions.push("dex_type = ?");
+            params_vec.push(dex);
+        }
+
+        if !conditions.is_empty() {
+            query.push_str(" WHERE ");
+            query.push_str(&conditions.join(" AND "));
+        }
+
+        // 按 reserve_usd 降序排序
+        query.push_str(" ORDER BY reserve_usd DESC");
+
+        if let Some(lim) = limit {
+            query.push_str(&format!(" LIMIT {}", lim));
+        }
+
+        let binding = self.conn.lock().unwrap();
+        let mut stmt = binding.prepare(&query)?;
+        let params: Vec<&dyn rusqlite::ToSql> = params_vec.iter().map(|p| p as &dyn rusqlite::ToSql).collect();
+        
+        let pair_iter = stmt.query_map(params.as_slice(), |row| {
+            Ok(PairData {
+                id: row.get(0)?,
+                network: row.get(1)?,
+                dex_type: row.get(2)?,
+                protocol_type: row.get(3)?,
+                token0: TokenInfo {
+                    id: row.get(4)?,
+                    symbol: row.get(5)?,
+                    name: row.get(6)?,
+                    decimals: row.get(7)?,
+                },
+                token1: TokenInfo {
+                    id: row.get(8)?,
+                    symbol: row.get(9)?,
+                    name: row.get(10)?,
+                    decimals: row.get(11)?,
+                },
+                volume_usd: row.get(12)?,
+                reserve_usd: row.get(13)?,
+                tx_count: row.get(14)?,
+                reserve0: row.get(15)?,
+                reserve1: row.get(16)?,
+                fee_tier: row.get(17)?,
+                sqrt_price: row.get(18)?,
+                tick: row.get(19)?,
+            })
+        })?;
+
+        let mut pairs = Vec::new();
+        for pair in pair_iter {
+            pairs.push(pair?);
+        }
+
+        Ok(pairs)
+    }
+
     /// 根据交易对ID查找特定交易对 - 直接数据库操作
     pub fn find_pair_by_id(&self, pair_id: &str) -> Result<Option<PairData>> {
         use crate::thegraph::TokenInfo;
@@ -599,8 +685,8 @@ mod tests {
         let test_pair = PairData {
             id: "test_pair_1".to_string(),
             network: "ethereum".to_string(),
-            dex_type: "UNI_V2".to_string(),
-            protocol_type: "amm_v2".to_string(),
+            dex_type: dex_types::UNISWAP_V2.to_string(),
+            protocol_type: protocol_types::AMM_V2.to_string(),
             token0: TokenInfo {
                 id: "token0_id".to_string(),
                 symbol: "TOKEN0".to_string(),

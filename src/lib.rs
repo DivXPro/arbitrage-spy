@@ -7,6 +7,7 @@ pub mod config;
 pub mod database;
 pub mod dex;
 pub mod event_listener;
+pub mod log_adapter;
 pub mod monitor;
 pub mod pairs;
 pub mod price_calculator;

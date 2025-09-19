@@ -6,6 +6,7 @@ mod config;
 mod database;
 mod dex;
 mod event_listener;
+mod log_adapter;
 mod monitor;
 mod pairs;
 mod price_calculator;
@@ -17,16 +18,15 @@ mod types;
 mod utils;
 
 use cli::CliApp;
+use log_adapter::LogAdapter;
 
 #[tokio::main]
 async fn main() -> Result<()> {
     // 加载 .env 文件
     dotenv::dotenv().ok();
 
-    // 初始化标准日志系统
-    env_logger::Builder::from_default_env()
-        .filter_level(log::LevelFilter::Info)
-        .init();
+    // 初始化日志适配器系统（默认为终端模式）
+    LogAdapter::init().expect("Failed to initialize log adapter");
 
     info!("启动区块链套利监控系统...");
 

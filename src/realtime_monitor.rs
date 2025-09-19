@@ -2,9 +2,10 @@ use anyhow::Result;
 use log::info;
 use tokio::sync::mpsc;
 
-use crate::config::Config;
+use crate::config::{dex_types, Config};
 use crate::database::Database;
 use crate::event_listener::EventListener;
+use crate::log_adapter::LogAdapter;
 use crate::table_display::{DisplayMessage, TableDisplay, PairDisplay, PairDisplayConverter};
 use crate::thegraph::PairData;
 
@@ -24,6 +25,10 @@ impl RealTimeMonitor {
     pub async fn start_monitoring(self, count: usize) -> Result<()> {
         println!("启动模块化实时监控系统...");
         
+        // 切换到表格模式，让日志显示在表格的日志区域
+        LogAdapter::switch_to_table();
+        info!("已切换到表格日志模式");
+        
         // 创建消息通道
         let (sender, receiver) = mpsc::channel::<DisplayMessage>(100);
         println!("消息通道创建完成");
@@ -31,7 +36,7 @@ impl RealTimeMonitor {
         // 准备初始数据
         println!("正在获取初始交易对数据...");
         let pair_manager = crate::pairs::PairManager::new(&self.database);
-        let initial_pairs = pair_manager.load_pairs_by_filter(None, Some("UNI_V3"), Some(count.min(10)))?;
+        let initial_pairs = pair_manager.load_pairs_by_value(None, Some(dex_types::UNISWAP_V3), Some(count.min(10)))?;
         println!("获取到 {} 个初始交易对", initial_pairs.len());
         let initial_data = self.convert_pairs_to_display(&initial_pairs)?;
         println!("初始数据转换完成");
@@ -78,6 +83,9 @@ impl RealTimeMonitor {
             }
         }
         
+        // 表格显示结束后，切换回终端模式
+        LogAdapter::switch_to_terminal();
+        info!("已切换回终端日志模式");
         info!("实时监控系统已停止");
         Ok(())
     }

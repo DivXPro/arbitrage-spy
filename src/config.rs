@@ -2,6 +2,22 @@ use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
+// 协议类型常量
+pub mod protocol_types {
+    pub const AMM_V2: &str = "amm_v2";
+    pub const AMM_V3: &str = "amm_v3";
+}
+
+// DEX类型常量
+pub mod dex_types {
+    pub const UNISWAP_V2: &str = "UNI_V2";
+    pub const UNISWAP_V3: &str = "UNI_V3";
+    pub const SUSHISWAP: &str = "sushiswap";
+    pub const PANCAKESWAP: &str = "pancakeswap";
+    pub const CURVE: &str = "curve";
+    pub const BALANCER: &str = "balancer";
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Config {
     pub dex_configs: HashMap<String, DexConfig>,

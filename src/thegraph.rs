@@ -2,6 +2,8 @@ use anyhow::{anyhow, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::env;
+use crate::types::{TokenPair, Token};
+use crate::config::{protocol_types, dex_types};
 
 // Manual GraphQL query structure for Uniswap V2 pairs
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -36,7 +38,7 @@ fn default_network() -> String {
 }
 
 fn default_dex_type() -> String {
-    "uniswap_v2".to_string()
+    dex_types::UNISWAP_V2.to_string()
 }
 
 fn default_fee_tier() -> String {
@@ -44,7 +46,7 @@ fn default_fee_tier() -> String {
 }
 
 fn default_protocol_type() -> String {
-    "amm_v2".to_string()  // Default to AMM V2 protocol
+    protocol_types::AMM_V2.to_string()  // Default to AMM V2 protocol
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -125,8 +127,8 @@ impl From<PoolData> for PairData {
         PairData {
             id: pool.id,
             network: "ethereum".to_string(),
-            dex_type: "UNI_V3".to_string(),
-            protocol_type: "amm_v3".to_string(),
+            dex_type: dex_types::UNISWAP_V3.to_string(),
+            protocol_type: protocol_types::AMM_V3.to_string(),
             token0: pool.token0,
             token1: pool.token1,
             volume_usd: pool.volume_usd,
@@ -372,8 +374,8 @@ mod tests {
             PairData {
                 id: "0x1".to_string(),
                 network: "ethereum".to_string(),
-                dex_type: "uniswap_v2".to_string(),
-                protocol_type: "amm_v2".to_string(),
+                dex_type: dex_types::UNISWAP_V2.to_string(),
+                protocol_type: protocol_types::AMM_V2.to_string(),
                 token0: TokenInfo {
                     id: "0xa".to_string(),
                     symbol: "WETH".to_string(),
@@ -398,8 +400,8 @@ mod tests {
             PairData {
                 id: "0x2".to_string(),
                 network: "ethereum".to_string(),
-                dex_type: "uniswap_v2".to_string(),
-                protocol_type: "amm_v2".to_string(),
+                dex_type: dex_types::UNISWAP_V2.to_string(),
+                protocol_type: protocol_types::AMM_V2.to_string(),
                 token0: TokenInfo {
                     id: "0xc".to_string(),
                     symbol: "WETH".to_string(),

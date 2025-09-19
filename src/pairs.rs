@@ -1,6 +1,7 @@
 use anyhow::Result;
 use crate::thegraph::PairData;
 use crate::database::Database;
+use crate::config::{protocol_types, dex_types};
 
 /// 交易对管理器 - 负责业务逻辑
 pub struct PairManager {
@@ -46,6 +47,23 @@ impl PairManager {
         
         // 调用数据库层的方法
         let pairs = self.database.load_pairs_by_filter(network, dex_type, limit)?;
+        
+        // 业务逻辑：结果处理
+        Ok(self.postprocess_pairs(pairs))
+    }
+
+    /// 按价值（reserve_usd）降序获取交易对 - 业务逻辑
+    pub fn load_pairs_by_value(
+        &self,
+        network: Option<&str>,
+        dex_type: Option<&str>,
+        limit: Option<usize>,
+    ) -> Result<Vec<PairData>> {
+        // 业务逻辑：参数验证
+        self.validate_filter_params(network, dex_type, limit)?;
+        
+        // 调用数据库层的方法
+        let pairs = self.database.load_pairs_by_value(network, dex_type, limit)?;
         
         // 业务逻辑：结果处理
         Ok(self.postprocess_pairs(pairs))
@@ -144,7 +162,7 @@ impl PairManager {
 
     /// 获取支持的DEX类型列表 - 业务方法
     pub fn get_supported_dex_types(&self) -> Vec<&'static str> {
-        vec!["UNI_V2", "UNI_V3", "sushiswap", "pancakeswap"]
+        vec![dex_types::UNISWAP_V2, dex_types::UNISWAP_V3, dex_types::SUSHISWAP, dex_types::PANCAKESWAP]
     }
 
     /// 检查网络是否支持 - 业务方法
@@ -192,7 +210,7 @@ mod tests {
         let manager = PairManager::new(&database);
         
         // 测试有效参数
-        assert!(manager.validate_filter_params(Some("ethereum"), Some("uniswap_v2"), Some(100)).is_ok());
+        assert!(manager.validate_filter_params(Some("ethereum"), Some(dex_types::UNISWAP_V2), Some(100)).is_ok());
         
         // 测试无效参数 - limit为0
         assert!(manager.validate_filter_params(None, None, Some(0)).is_err());
@@ -209,7 +227,7 @@ mod tests {
         assert!(manager.is_network_supported("ethereum"));
         assert!(!manager.is_network_supported("unknown"));
         
-        assert!(manager.is_dex_type_supported("uniswap_v2"));
+        assert!(manager.is_dex_type_supported(dex_types::UNISWAP_V2));
         assert!(!manager.is_dex_type_supported("unknown"));
     }
 
@@ -229,8 +247,8 @@ mod tests {
         PairData {
             id: "0x123".to_string(),
             network: "ethereum".to_string(),
-            dex_type: "uniswap_v2".to_string(),
-            protocol_type: "amm_v2".to_string(),
+            dex_type: dex_types::UNISWAP_V2.to_string(),
+            protocol_type: protocol_types::AMM_V2.to_string(),
             token0: TokenInfo {
                 id: "0xA0b86a33E6441E6C7D3E4C2C4C6C6C6C6C6C6C6C".to_string(),
                 symbol: "USDC".to_string(),
