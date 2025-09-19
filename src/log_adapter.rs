@@ -1,4 +1,4 @@
-use std::sync::{Mutex};
+use std::sync::{Mutex, Once};
 use log::{Log, Metadata, Record, Level};
 
 /// 日志输出模式
@@ -12,28 +12,33 @@ pub enum LogMode {
 
 /// 全局日志模式状态
 static LOG_MODE: Mutex<LogMode> = Mutex::new(LogMode::Terminal);
+static INIT_ONCE: Once = Once::new();
 
 /// 日志适配器，根据当前模式选择输出方式
 pub struct LogAdapter;
 
 impl LogAdapter {
-    /// 初始化日志系统
+    /// 初始化日志系统（统一使用tui_logger）
     pub fn init() -> Result<(), Box<dyn std::error::Error>> {
-        // 在终端模式下，使用env_logger
-        env_logger::Builder::from_default_env()
-            .filter_level(log::LevelFilter::Info)
-            .init();
-        
-        // 同时初始化tui_logger，但它不会成为主要的日志器
-        // 当我们切换到表格模式时，会重新初始化
+        INIT_ONCE.call_once(|| {
+            // 统一使用tui_logger作为日志系统
+            // 这样可以在表格模式和终端模式之间切换
+            if let Err(e) = tui_logger::init_logger(log::LevelFilter::Info) {
+                eprintln!("Failed to initialize tui_logger: {}", e);
+                // 如果tui_logger初始化失败，回退到env_logger
+                env_logger::Builder::from_default_env()
+                    .filter_level(log::LevelFilter::Info)
+                    .init();
+            } else {
+                tui_logger::set_default_level(log::LevelFilter::Info);
+            }
+        });
         Ok(())
     }
 
-    /// 重新初始化为表格模式
+    /// 初始化为表格模式（已经使用tui_logger，无需重新初始化）
     pub fn init_table_mode() -> Result<(), Box<dyn std::error::Error>> {
-        // 初始化tui_logger作为主要日志器
-        tui_logger::init_logger(log::LevelFilter::Info)?;
-        tui_logger::set_default_level(log::LevelFilter::Info);
+        // 由于我们已经使用tui_logger作为主要日志系统，这里无需额外操作
         Ok(())
     }
 
@@ -55,15 +60,15 @@ impl LogAdapter {
     /// 切换到终端模式
     pub fn switch_to_terminal() {
         Self::set_mode(LogMode::Terminal);
-        // 注意：这里不重新初始化日志器，因为可能会导致问题
-        // 在实际使用中，模式切换主要影响表格显示的行为
+        // 在终端模式下，tui_logger仍然工作
+        // 日志会被tui_logger收集，但不会显示在TUI中
     }
 
     /// 切换到表格模式
     pub fn switch_to_table() {
         Self::set_mode(LogMode::Table);
-        // 尝试重新初始化为tui_logger模式
-        Self::init_table_mode().ok();
+        // 由于我们已经使用tui_logger，无需重新初始化
+        // 日志会自动显示在TUI的日志区域中
     }
 }
 

@@ -484,6 +484,16 @@ impl EventListener {
              // 将 PairData 转换为 PairDisplay
              let pair_display = PairDisplayConverter::convert_for_event(pair, index + 1);
              
+             // 显示pair详细信息
+             info!("📊 交易对更新: {} | 协议: {} | DEX: {} | 价格: {} | 成交量: ${:.2} | 储备: ${:.2}", 
+                 pair_name, 
+                 pair.protocol_type, 
+                 pair.dex_type,
+                 pair_display.price,
+                 pair.volume_usd.parse::<f64>().unwrap_or(0.0),
+                 pair.reserve_usd.parse::<f64>().unwrap_or(0.0)
+             );
+             
              // 发送局部更新消息
              let message = DisplayMessage::PartialUpdate {
                  index,

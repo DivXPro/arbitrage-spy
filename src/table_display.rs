@@ -109,6 +109,9 @@ pub struct TableDisplay {
     show_logs: bool,
     tui_logger_state: tui_logger::TuiWidgetState,
     initial_data: Vec<PairDisplay>,
+    scroll_offset: usize,
+    visible_rows: usize,
+    all_pairs: Vec<PairDisplay>,
 }
 
 impl TableDisplay {
@@ -118,12 +121,17 @@ impl TableDisplay {
         
         info!("📊 接收到 {} 个初始交易对数据", initial_data.len());
         
+        let all_pairs = initial_data.clone();
+        
         Ok(Self {
             terminal,
             receiver,
             show_logs: true,
             tui_logger_state: tui_logger::TuiWidgetState::new(),
             initial_data,
+            scroll_offset: 0,
+            visible_rows: 10,
+            all_pairs,
         })
     }
     
@@ -137,12 +145,13 @@ impl TableDisplay {
         // 使用初始数据作为当前显示的数据
         let mut current_pairs = self.initial_data.clone();
         
-        // 显示初始数据
+        // 初始渲染
+        let visible_pairs = self.get_visible_pairs(&current_pairs);
         self.terminal.draw(|f| {
             if self.show_logs {
                 Self::render_ui_with_logs(f, &current_pairs, &mut self.tui_logger_state);
             } else {
-                Self::render_ui_static(f, &current_pairs);
+                Self::render_ui_static(f, &visible_pairs, self.scroll_offset, current_pairs.len(), self.visible_rows);
             }
         })?;
         
@@ -155,22 +164,24 @@ impl TableDisplay {
                     match message {
                         Some(DisplayMessage::FullUpdate(pairs)) => {
                             current_pairs = pairs;
+                            let visible_pairs = self.get_visible_pairs(&current_pairs);
                             let _ = self.terminal.draw(|f| {
                                 if self.show_logs {
                                      Self::render_ui_with_logs(f, &current_pairs, &mut self.tui_logger_state);
                                  } else {
-                                     Self::render_ui_static(f, &current_pairs);
+                                     Self::render_ui_static(f, &visible_pairs, self.scroll_offset, current_pairs.len(), self.visible_rows);
                                  }
                             });
                         }
                         Some(DisplayMessage::PartialUpdate { index, data }) => {
                             if index < current_pairs.len() {
                                 current_pairs[index] = data;
+                                let visible_pairs = self.get_visible_pairs(&current_pairs);
                                 let _ = self.terminal.draw(|f| {
                                     if self.show_logs {
                                          Self::render_ui_with_logs(f, &current_pairs, &mut self.tui_logger_state);
                                      } else {
-                                         Self::render_ui_static(f, &current_pairs);
+                                         Self::render_ui_static(f, &visible_pairs, self.scroll_offset, current_pairs.len(), self.visible_rows);
                                      }
                                 });
                             }
@@ -181,11 +192,12 @@ impl TableDisplay {
                                     current_pairs[index] = data;
                                 }
                             }
+                            let visible_pairs = self.get_visible_pairs(&current_pairs);
                             let _ = self.terminal.draw(|f| {
                                 if self.show_logs {
                                      Self::render_ui_with_logs(f, &current_pairs, &mut self.tui_logger_state);
                                  } else {
-                                     Self::render_ui_static(f, &current_pairs);
+                                     Self::render_ui_static(f, &visible_pairs, self.scroll_offset, current_pairs.len(), self.visible_rows);
                                  }
                             });
                         }
@@ -202,30 +214,51 @@ impl TableDisplay {
                                 }
                                 KeyCode::Char('l') => {
                                     self.show_logs = !self.show_logs;
+                                    let visible_pairs = self.get_visible_pairs(&current_pairs);
+                                    let scroll_offset = self.scroll_offset;
+                                    let visible_rows = self.visible_rows;
                                     let _ = self.terminal.draw(|f| {
                                         if self.show_logs {
                                              Self::render_ui_with_logs(f, &current_pairs, &mut self.tui_logger_state);
                                          } else {
-                                             Self::render_ui_static(f, &current_pairs);
+                                             Self::render_ui_static(f, &visible_pairs, scroll_offset, current_pairs.len(), visible_rows);
                                          }
                                     });
                                 }
-                                _ => {
-                                    // 处理方向键和其他键盘事件
-                                    if let Some(tui_event) = self.map_key_to_tui_event(key.code) {
-                                        if self.show_logs {
-                                            // 在日志模式下，方向键用于滚动日志
-                                            self.tui_logger_state.transition(tui_event);
+                                KeyCode::Up => {
+                                    if !self.show_logs {
+                                        // 只在表格模式下，向上滚动
+                                        if self.scroll_offset > 0 {
+                                            self.scroll_offset -= 1;
+                                            let visible_pairs = self.get_visible_pairs(&current_pairs);
                                             let _ = self.terminal.draw(|f| {
-                                                Self::render_ui_with_logs(f, &current_pairs, &mut self.tui_logger_state);
-                                            });
-                                        } else {
-                                            // 在表格模式下，方向键也应该有响应（目前只是重新绘制）
-                                            let _ = self.terminal.draw(|f| {
-                                                Self::render_ui_static(f, &current_pairs);
+                                                Self::render_ui_static(f, &visible_pairs, self.scroll_offset, current_pairs.len(), self.visible_rows);
                                             });
                                         }
                                     }
+                                    // 在日志模式下，忽略方向键，不进行滚动
+                                }
+                                KeyCode::Down => {
+                                    if !self.show_logs {
+                                        // 只在表格模式下，向下滚动
+                                        let max_offset = if current_pairs.len() > self.visible_rows {
+                                            current_pairs.len() - self.visible_rows
+                                        } else {
+                                            0
+                                        };
+                                        if self.scroll_offset < max_offset {
+                                            self.scroll_offset += 1;
+                                            let visible_pairs = self.get_visible_pairs(&current_pairs);
+                                            let _ = self.terminal.draw(|f| {
+                                                Self::render_ui_static(f, &visible_pairs, self.scroll_offset, current_pairs.len(), self.visible_rows);
+                                            });
+                                        }
+                                    }
+                                    // 在日志模式下，忽略方向键，不进行滚动
+                                }
+                                _ => {
+                                    // 在日志模式下，忽略其他可能导致滚动的键盘事件
+                                    // 只保留基本的显示功能，不处理滚动相关的键盘事件
                                 }
                             }
                         }
@@ -242,28 +275,30 @@ impl TableDisplay {
         Ok(())
     }
 
+    fn get_visible_pairs(&self, pairs: &[PairDisplay]) -> Vec<PairDisplay> {
+        let start = self.scroll_offset;
+        let end = std::cmp::min(start + self.visible_rows, pairs.len());
+        pairs[start..end].to_vec()
+    }
+
     fn map_key_to_tui_event(&self, key_code: KeyCode) -> Option<tui_logger::TuiWidgetEvent> {
+        // 禁用所有滚动相关的键位映射，日志区域不再支持滚动
+        // 只保留基本的显示控制功能
         use tui_logger::TuiWidgetEvent;
         match key_code {
-            KeyCode::Up => Some(TuiWidgetEvent::UpKey),
-            KeyCode::Down => Some(TuiWidgetEvent::DownKey),
-            KeyCode::Left => Some(TuiWidgetEvent::LeftKey),
-            KeyCode::Right => Some(TuiWidgetEvent::RightKey),
             KeyCode::Char('h') => Some(TuiWidgetEvent::HideKey),
             KeyCode::Char('f') => Some(TuiWidgetEvent::FocusKey),
-            KeyCode::Char('+') => Some(TuiWidgetEvent::PlusKey),
-            KeyCode::Char('-') => Some(TuiWidgetEvent::MinusKey),
-            KeyCode::Char(' ') => Some(TuiWidgetEvent::SpaceKey),
             KeyCode::Esc => Some(TuiWidgetEvent::EscapeKey),
             _ => None,
         }
     }
 
     fn render_ui_with_logs(f: &mut Frame, pairs: &[PairDisplay], tui_logger_state: &mut tui_logger::TuiWidgetState) {
-        // Split screen: table on top, logs on bottom
+        // Split screen: table on top, logs on bottom with better proportions
         let chunks = Layout::default()
             .direction(Direction::Vertical)
-            .constraints([Constraint::Percentage(60), Constraint::Percentage(40)])
+            .constraints([Constraint::Percentage(65), Constraint::Percentage(35)])
+            .margin(0)
             .split(f.area());
         
         Self::render_table_area(f, chunks[0], pairs, true);
@@ -273,15 +308,20 @@ impl TableDisplay {
     fn render_log_area(f: &mut Frame, area: Rect, tui_logger_state: &mut tui_logger::TuiWidgetState) {
         let tui_logger_widget = TuiLoggerWidget::default()
             .block(Block::default()
-                .title("日志 (按 'l' 切换显示)")
+                .title("📋 日志输出 (按 'l' 切换显示)")
                 .borders(Borders::ALL)
                 .border_style(Style::default().fg(Color::Yellow)))
-            .output_separator('|')
-            .output_timestamp(Some("%H:%M:%S%.3f".to_string()))
+            .output_separator(' ')  // 使用空格分隔符，更整齐
+            .output_timestamp(Some("%H:%M:%S".to_string()))  // 简化时间戳格式
             .output_level(Some(TuiLoggerLevelOutput::Abbreviated))
-            .output_target(true)
+            .output_target(false)  // 隐藏target，减少混乱
             .output_file(false)
             .output_line(false)
+            .style_error(Style::default().fg(Color::Red))
+            .style_warn(Style::default().fg(Color::Yellow))
+            .style_info(Style::default().fg(Color::Green))
+            .style_debug(Style::default().fg(Color::Blue))
+            .style_trace(Style::default().fg(Color::Magenta))
             .state(tui_logger_state);
         
         f.render_widget(tui_logger_widget, area);
@@ -306,7 +346,7 @@ impl TableDisplay {
         
         // 渲染表格
         if !pairs.is_empty() {
-            let header_cells = ["排名", "交易对", "DEX", "价格 (USD)", "流动性", "最后更新"]
+            let header_cells = ["排名", "交易对", "DEX", "交易对价格", "流动性", "最后更新"]
                 .iter()
                 .map(|h| Cell::from(*h).style(Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)));
             let header = Row::new(header_cells).height(1).bottom_margin(1);
@@ -357,7 +397,7 @@ impl TableDisplay {
         f.render_widget(help, chunks[2]);
     }
 
-    fn render_ui_static(f: &mut Frame, pairs: &[PairDisplay]) {
+    fn render_ui_static(f: &mut Frame, pairs: &[PairDisplay], scroll_offset: usize, total_pairs: usize, visible_rows: usize) {
         let chunks = Layout::default()
             .direction(Direction::Vertical)
             .margin(1)
@@ -376,7 +416,7 @@ impl TableDisplay {
         
         // 渲染表格
         if !pairs.is_empty() {
-            let header_cells = ["排名", "交易对", "DEX", "价格 (USD)", "流动性", "Reserve0", "Reserve1", "最后更新"]
+            let header_cells = ["排名", "交易对", "DEX", "交易对价格", "流动性", "Reserve0", "Reserve1", "最后更新"]
                 .iter()
                 .map(|h| Cell::from(*h).style(Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)));
             let header = Row::new(header_cells).height(1).bottom_margin(1);
@@ -414,7 +454,15 @@ impl TableDisplay {
         }
         
         // 渲染提示信息
-        let help = Paragraph::new("按 Ctrl+C 退出监控 | 数据实时更新中...")
+        let scroll_info = if total_pairs > visible_rows {
+            format!("按 Ctrl+C 退出监控 | 按 ↑↓ 滚动 | 显示 {}-{}/{} | 数据实时更新中...", 
+                scroll_offset + 1, 
+                std::cmp::min(scroll_offset + visible_rows, total_pairs), 
+                total_pairs)
+        } else {
+            format!("按 Ctrl+C 退出监控 | 显示 {}/{} | 数据实时更新中...", total_pairs, total_pairs)
+        };
+        let help = Paragraph::new(scroll_info)
             .style(Style::default().fg(Color::Yellow))
             .block(Block::default().borders(Borders::ALL));
         f.render_widget(help, chunks[2]);

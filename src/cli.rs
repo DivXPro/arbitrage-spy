@@ -64,9 +64,9 @@ impl CliApp {
                 Arg::new("count")
                     .long("count")
                     .short('c')
-                    .help("显示的交易对数量 (默认: 10)")
+                    .help("显示的交易对数量 (默认: 100)")
                     .value_name("NUMBER")
-                    .default_value("10")
+                    .default_value("100")
                     .requires(MONITOR_ARG),
             )
             .arg(
@@ -102,7 +102,7 @@ impl CliApp {
             let count: usize = matches.get_one::<String>("count")
                 .unwrap()
                 .parse()
-                .unwrap_or(10);
+                .unwrap_or(100);
             
             info!("启动实时监控模式...");
             self.start_realtime_monitor(count).await?;
