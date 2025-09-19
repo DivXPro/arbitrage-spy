@@ -51,8 +51,20 @@ impl PriceCalculator {
     
     /// 调整BigDecimal的小数位数
     fn adjust_for_decimals(value: &BigDecimal, decimals: u32) -> BigDecimal {
-        let divisor = BigDecimal::from_u64(10_u64.pow(decimals))
-            .unwrap_or_else(|| BigDecimal::from(1));
+        // 安全地计算 10^decimals，避免整数溢出
+        let divisor = if decimals <= 18 {
+            // 对于常见的小数位数，使用预计算的值
+            BigDecimal::from_u64(10_u64.pow(decimals))
+                .unwrap_or_else(|| BigDecimal::from(1))
+        } else {
+            // 对于极大的小数位数，使用BigDecimal的乘法
+            let ten = BigDecimal::from(10);
+            let mut result = BigDecimal::from(1);
+            for _ in 0..decimals {
+                result = result * &ten;
+            }
+            result
+        };
         value / divisor
     }
     
@@ -104,8 +116,22 @@ impl PriceCalculator {
         // 需要将价格乘以 10^(token0_decimals - token1_decimals) = 10^(18-6) = 10^12
         let decimals_diff = token0_decimals as i32 - token1_decimals as i32;
         let price = if decimals_diff != 0 {
-            let adjustment = BigDecimal::from_u64(10_u64.pow(decimals_diff.abs() as u32))
-                .unwrap_or_else(|| BigDecimal::from(1));
+            let abs_diff = decimals_diff.abs() as u32;
+            
+            // 安全地计算 10^abs_diff，避免整数溢出
+            let adjustment = if abs_diff <= 18 {
+                // 对于常见的小数位数差异，使用预计算的值
+                BigDecimal::from_u64(10_u64.pow(abs_diff))
+                    .unwrap_or_else(|| BigDecimal::from(1))
+            } else {
+                // 对于极大的差异，使用BigDecimal的字符串构造
+                let ten = BigDecimal::from(10);
+                let mut result = BigDecimal::from(1);
+                for _ in 0..abs_diff {
+                    result = result * &ten;
+                }
+                result
+            };
             
             if decimals_diff > 0 {
                 price_raw * adjustment
@@ -146,8 +172,22 @@ impl PriceCalculator {
         // 调整小数位数差异
         let decimals_diff = token0_decimals as i32 - token1_decimals as i32;
         let price = if decimals_diff != 0 {
-            let adjustment = BigDecimal::from_u64(10_u64.pow(decimals_diff.abs() as u32))
-                .unwrap_or_else(|| BigDecimal::from(1));
+            let abs_diff = decimals_diff.abs() as u32;
+            
+            // 安全地计算 10^abs_diff，避免整数溢出
+            let adjustment = if abs_diff <= 18 {
+                // 对于常见的小数位数差异，使用预计算的值
+                BigDecimal::from_u64(10_u64.pow(abs_diff))
+                    .unwrap_or_else(|| BigDecimal::from(1))
+            } else {
+                // 对于极大的差异，使用BigDecimal的字符串构造
+                let ten = BigDecimal::from(10);
+                let mut result = BigDecimal::from(1);
+                for _ in 0..abs_diff {
+                    result = result * &ten;
+                }
+                result
+            };
             
             if decimals_diff > 0 {
                 price_bd * adjustment

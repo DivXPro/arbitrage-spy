@@ -103,13 +103,9 @@ impl CliApp {
                 .unwrap()
                 .parse()
                 .unwrap_or(10);
-            let interval: u64 = matches.get_one::<String>("interval")
-                .unwrap()
-                .parse()
-                .unwrap_or(1);
             
             info!("启动实时监控模式...");
-            self.start_realtime_monitor(count, interval).await?;
+            self.start_realtime_monitor(count).await?;
             return Ok(());
         }
 
@@ -123,14 +119,14 @@ impl CliApp {
     }
 
     /// 启动实时监控模式
-    async fn start_realtime_monitor(&self, count: usize, interval: u64) -> Result<()> {
+    async fn start_realtime_monitor(&self, count: usize) -> Result<()> {
         println!("正在启动实时监控...");
         
         // 创建实时监控器
         let monitor = RealTimeMonitor::new(self.config.clone(), self.database.clone()).await?;
         
         // 开始监控
-        monitor.start_monitoring(count, interval).await?;
+        monitor.start_monitoring(count).await?;
         
         Ok(())
     }

@@ -24,7 +24,19 @@ pub fn ether_to_wei(ether: &BigDecimal) -> BigDecimal {
 
 /// 根据代币精度调整数量
 pub fn adjust_for_decimals(amount: &BigDecimal, decimals: u8) -> BigDecimal {
-    let divisor = BigDecimal::from(10u64.pow(decimals as u32));
+    // 安全地计算 10^decimals，避免整数溢出
+    let divisor = if decimals <= 18 {
+        // 对于常见的小数位数，使用预计算的值
+        BigDecimal::from(10u64.pow(decimals as u32))
+    } else {
+        // 对于极大的小数位数，使用BigDecimal的乘法
+        let ten = BigDecimal::from(10);
+        let mut result = BigDecimal::from(1);
+        for _ in 0..decimals {
+            result = result * &ten;
+        }
+        result
+    };
     amount / divisor
 }
 
