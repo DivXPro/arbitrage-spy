@@ -18,7 +18,7 @@ use tokio::sync::mpsc;
 use log::{info};
 use chrono;
 use crate::price_calculator::PriceCalculator;
-use crate::thegraph::PairData;
+use crate::pair_manager::PairData;
 
 #[derive(Clone, Debug)]
 pub struct PairDisplay {
@@ -56,7 +56,7 @@ impl PairDisplayConverter {
         PairDisplay {
             rank,
             pair: format!("{}/{}", pair.token0.symbol, pair.token1.symbol),
-            dex: pair.dex_type.clone(),
+            dex: pair.dex.clone(),
             price,
             liquidity: format!("${:.0}", pair.reserve_usd.parse::<f64>().unwrap_or(0.0)),
             last_update: chrono::Utc::now().format("%H:%M:%S").to_string(),
@@ -95,7 +95,7 @@ impl PairDisplayConverter {
         PairDisplay {
             rank,
             pair: format!("{}/{}", pair.token0.symbol, pair.token1.symbol),
-            dex: pair.dex_type.clone(),
+            dex: pair.dex.clone(),
             price,
             liquidity: format!("${:.0}", pair.reserve_usd.parse::<f64>().unwrap_or(0.0)),
             last_update: chrono::Utc::now().format("%H:%M:%S").to_string(),

@@ -13,7 +13,7 @@ use std::env;
 use crate::database::Database;
 use crate::price_calculator::PriceCalculator;
 use crate::table_display::{DisplayMessage, PairDisplay, PairDisplayConverter};
-use crate::thegraph::PairData;
+use crate::pair_manager::PairData;
 use crate::config::{protocol_types, dex_types};
 use chrono;
 
@@ -57,7 +57,7 @@ pub enum EventType {
 pub struct ContractInfo {
     pub address: H160,
     pub protocol_type: String, // protocol_types::AMM_V2 or protocol_types::AMM_V3
-    pub dex_type: String,      // dex_types::UNISWAP_V2, dex_types::UNISWAP_V3, etc.
+    pub dex: String,      // dex_types::UNISWAP_V2, dex_types::UNISWAP_V3, etc.
 }
 
 pub struct EventListener {
@@ -88,7 +88,7 @@ impl EventListener {
                 let contract_info = ContractInfo {
                     address,
                     protocol_type: pair.protocol_type.clone(),
-                    dex_type: pair.dex_type.clone(),
+                    dex: pair.dex.clone(),
                 };
                 info!("已添加交易对合约监听: {} -> {} ({})", 
                       pair_name, pair.id, pair.protocol_type);
@@ -121,7 +121,7 @@ impl EventListener {
         let contract_info = ContractInfo {
             address: parsed_address,
             protocol_type: protocol_type.clone(),
-            dex_type: dex_type.clone(),
+            dex: dex_type.clone(),
         };
         
         self.contracts.insert(name.clone(), contract_info);
@@ -488,7 +488,7 @@ impl EventListener {
              info!("📊 交易对更新: {} | 协议: {} | DEX: {} | 价格: {} | 成交量: ${:.2} | 储备: ${:.2}", 
                  pair_name, 
                  pair.protocol_type, 
-                 pair.dex_type,
+                 pair.dex,
                  pair_display.price,
                  pair.volume_usd.parse::<f64>().unwrap_or(0.0),
                  pair.reserve_usd.parse::<f64>().unwrap_or(0.0)
@@ -572,7 +572,7 @@ impl EventListener {
 
     async fn fetch_and_process_data_static(database: &Database, count: usize) -> Result<Vec<PairDisplay>> {
         // 从数据库获取最新的交易对数据
-        let pair_manager = crate::pairs::PairManager::new(&database);
+        let pair_manager = crate::pair_manager::PairManager::new(&database);
         let pairs = pair_manager.load_pairs_by_filter(None, None, Some(count))?;
         
         // 转换为显示格式（使用统一的转换工具）

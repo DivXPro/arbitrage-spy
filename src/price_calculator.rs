@@ -1,7 +1,7 @@
 use anyhow::Result;
 use bigdecimal::{BigDecimal, FromPrimitive, Zero};
 use std::str::FromStr;
-use crate::thegraph::{PairData};
+use crate::pair_manager::PairData;
 use crate::types::{Price, TokenPair};
 use crate::config::{protocol_types, dex_types};
 
@@ -269,7 +269,7 @@ impl PriceCalculator {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::thegraph::TokenInfo;
+    use crate::pair_manager::TokenInfo;
     
     #[test]
     fn test_calculate_price_with_decimals() {
@@ -294,7 +294,7 @@ mod tests {
         let pair = PairData {
             id: "test".to_string(),
             network: "ethereum".to_string(),
-            dex_type: dex_types::UNISWAP_V2.to_string(),
+            dex: dex_types::UNISWAP_V2.to_string(),
             protocol_type: protocol_types::AMM_V2.to_string(),
             token0: TokenInfo {
                 id: "token0".to_string(),
@@ -340,7 +340,7 @@ mod tests {
         let valid_pair = PairData {
             id: "test".to_string(),
             network: "ethereum".to_string(),
-            dex_type: dex_types::UNISWAP_V2.to_string(),
+            dex: dex_types::UNISWAP_V2.to_string(),
             protocol_type: protocol_types::AMM_V2.to_string(),
             token0: TokenInfo {
                 id: "token0".to_string(),
@@ -408,7 +408,7 @@ mod tests {
         let pair = PairData {
             id: "test".to_string(),
             network: "ethereum".to_string(),
-            dex_type: dex_types::UNISWAP_V3.to_string(),
+            dex: dex_types::UNISWAP_V3.to_string(),
             protocol_type: protocol_types::AMM_V3.to_string(),
             token0: TokenInfo {
                  id: "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2".to_string(), // WETH
@@ -445,7 +445,7 @@ mod tests {
         let pair = PairData {
             id: "test".to_string(),
             network: "ethereum".to_string(),
-            dex_type: dex_types::UNISWAP_V3.to_string(),
+            dex: dex_types::UNISWAP_V3.to_string(),
             protocol_type: protocol_types::AMM_V3.to_string(),
             token0: TokenInfo {
                  id: "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2".to_string(), // WETH
@@ -482,7 +482,7 @@ mod tests {
         let pair = PairData {
             id: "test".to_string(),
             network: "ethereum".to_string(),
-            dex_type: dex_types::UNISWAP_V3.to_string(),
+            dex: dex_types::UNISWAP_V3.to_string(),
             protocol_type: protocol_types::AMM_V3.to_string(),
             token0: TokenInfo {
                 id: "token0".to_string(),
@@ -515,7 +515,7 @@ mod tests {
         let pair = PairData {
             id: "test".to_string(),
             network: "ethereum".to_string(),
-            dex_type: dex_types::UNISWAP_V2.to_string(),
+            dex: dex_types::UNISWAP_V2.to_string(),
             protocol_type: protocol_types::AMM_V2.to_string(),
             token0: TokenInfo {
                 id: "token0".to_string(),
@@ -550,7 +550,7 @@ mod tests {
         let pair = PairData {
             id: "test".to_string(),
             network: "ethereum".to_string(),
-            dex_type: dex_types::UNISWAP_V3.to_string(),
+            dex: dex_types::UNISWAP_V3.to_string(),
             protocol_type: protocol_types::AMM_V3.to_string(),
             token0: TokenInfo {
                 id: "token0".to_string(),

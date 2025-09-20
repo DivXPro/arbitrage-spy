@@ -1,7 +1,59 @@
 use anyhow::Result;
-use crate::thegraph::PairData;
+use serde::{Deserialize, Serialize};
 use crate::database::Database;
-use crate::config::{protocol_types, dex_types};
+use crate::config::{dex_types, protocol_types};
+
+// 交易对数据结构
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PairData {
+    pub id: String,
+    #[serde(default = "default_network")]
+    pub network: String,
+    #[serde(default = "default_dex_type")]
+    pub dex: String,
+    #[serde(default = "default_protocol_type")]
+    pub protocol_type: String,
+    pub token0: TokenInfo,
+    pub token1: TokenInfo,
+    #[serde(rename = "volumeUSD")]
+    pub volume_usd: String,
+    #[serde(rename = "reserveUSD")]
+    pub reserve_usd: String,
+    #[serde(rename = "txCount")]
+    pub tx_count: String,
+    #[serde(rename = "reserve0")]
+    pub reserve0: String,
+    #[serde(rename = "reserve1")]
+    pub reserve1: String,
+    #[serde(rename = "feeTier", default = "default_fee_tier")]
+    pub fee_tier: String,
+    pub sqrt_price: Option<String>,
+    pub tick: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TokenInfo {
+    pub id: String,
+    pub symbol: String,
+    pub name: String,
+    pub decimals: String,
+}
+
+fn default_network() -> String {
+    "ethereum".to_string()
+}
+
+fn default_dex_type() -> String {
+    dex_types::UNISWAP_V2.to_string()
+}
+
+fn default_fee_tier() -> String {
+    "3000".to_string()  // Default to 0.3% fee for V2 pairs
+}
+
+fn default_protocol_type() -> String {
+    protocol_types::AMM_V2.to_string()  // Default to AMM V2 protocol
+}
 
 /// 交易对管理器 - 负责业务逻辑
 pub struct PairManager {
@@ -104,7 +156,7 @@ impl PairManager {
             if pair.network.is_empty() {
                 return Err(anyhow::anyhow!("Network cannot be empty"));
             }
-            if pair.dex_type.is_empty() {
+            if pair.dex.is_empty() {
                 return Err(anyhow::anyhow!("DEX type cannot be empty"));
             }
         }
@@ -179,7 +231,6 @@ impl PairManager {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::thegraph::TokenInfo;
 
     #[test]
     fn test_pair_manager_creation() {
@@ -231,23 +282,11 @@ mod tests {
         assert!(!manager.is_dex_type_supported("unknown"));
     }
 
-    #[test]
-    fn test_process_stats() {
-        let database = Database::new(Some("test_pairs.db")).unwrap();
-        let manager = PairManager::new(&database);
-        let stats = (100, 123.456789, 987.654321);
-        let processed = manager.process_stats(stats);
-        
-        assert_eq!(processed.0, 100);
-        assert_eq!(processed.1, 123.46);
-        assert_eq!(processed.2, 987.65);
-    }
-
     fn get_demo_pair() -> PairData {
         PairData {
             id: "0x123".to_string(),
             network: "ethereum".to_string(),
-            dex_type: dex_types::UNISWAP_V2.to_string(),
+            dex: dex_types::UNISWAP_V2.to_string(),
             protocol_type: protocol_types::AMM_V2.to_string(),
             token0: TokenInfo {
                 id: "0xA0b86a33E6441E6C7D3E4C2C4C6C6C6C6C6C6C6C".to_string(),
@@ -270,5 +309,17 @@ mod tests {
             sqrt_price: None,
             tick: None,
         }
+    }
+
+    #[test]
+    fn test_process_stats() {
+        let database = Database::new(Some("test_pairs.db")).unwrap();
+        let manager = PairManager::new(&database);
+        let stats = (100, 123.456789, 987.654321);
+        let processed = manager.process_stats(stats);
+        
+        assert_eq!(processed.0, 100);
+        assert_eq!(processed.1, 123.46);
+        assert_eq!(processed.2, 987.65);
     }
 }

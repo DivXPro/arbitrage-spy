@@ -2,37 +2,10 @@ use anyhow::{anyhow, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::env;
-use crate::types::{TokenPair, Token};
 use crate::config::{protocol_types, dex_types};
+use crate::pair_manager::{PairData, TokenInfo};
 
-// Manual GraphQL query structure for Uniswap V2 pairs
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct PairData {
-    pub id: String,
-    #[serde(default = "default_network")]
-    pub network: String,
-    #[serde(default = "default_dex_type")]
-    pub dex_type: String,
-    #[serde(default = "default_protocol_type")]
-    pub protocol_type: String,
-    pub token0: TokenInfo,
-    pub token1: TokenInfo,
-    #[serde(rename = "volumeUSD")]
-    pub volume_usd: String,
-    #[serde(rename = "reserveUSD")]
-    pub reserve_usd: String,
-    #[serde(rename = "txCount")]
-    pub tx_count: String,
-    #[serde(rename = "reserve0")]
-    pub reserve0: String,
-    #[serde(rename = "reserve1")]
-    pub reserve1: String,
-    #[serde(rename = "feeTier", default = "default_fee_tier")]
-    pub fee_tier: String,
-    pub sqrt_price: Option<String>,
-    pub tick: Option<String>,
-}
-
+// 默认值函数，用于 From 实现
 fn default_network() -> String {
     "ethereum".to_string()
 }
@@ -47,14 +20,6 @@ fn default_fee_tier() -> String {
 
 fn default_protocol_type() -> String {
     protocol_types::AMM_V2.to_string()  // Default to AMM V2 protocol
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct TokenInfo {
-    pub id: String,
-    pub symbol: String,
-    pub name: String,
-    pub decimals: String,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -127,7 +92,7 @@ impl From<PoolData> for PairData {
         PairData {
             id: pool.id,
             network: "ethereum".to_string(),
-            dex_type: dex_types::UNISWAP_V3.to_string(),
+            dex: dex_types::UNISWAP_V3.to_string(),
             protocol_type: protocol_types::AMM_V3.to_string(),
             token0: pool.token0,
             token1: pool.token1,
@@ -374,7 +339,7 @@ mod tests {
             PairData {
                 id: "0x1".to_string(),
                 network: "ethereum".to_string(),
-                dex_type: dex_types::UNISWAP_V2.to_string(),
+                dex: dex_types::UNISWAP_V2.to_string(),
                 protocol_type: protocol_types::AMM_V2.to_string(),
                 token0: TokenInfo {
                     id: "0xa".to_string(),
@@ -400,7 +365,7 @@ mod tests {
             PairData {
                 id: "0x2".to_string(),
                 network: "ethereum".to_string(),
-                dex_type: dex_types::UNISWAP_V2.to_string(),
+                dex: dex_types::UNISWAP_V2.to_string(),
                 protocol_type: protocol_types::AMM_V2.to_string(),
                 token0: TokenInfo {
                     id: "0xc".to_string(),

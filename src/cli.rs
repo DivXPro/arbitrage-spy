@@ -4,11 +4,10 @@ use log::{error, info};
 
 use crate::config::Config;
 use crate::database::Database;
-use crate::monitor::ArbitrageMonitor;
-use crate::pairs::PairManager;
+use crate::pair_manager::PairManager;
 use crate::realtime_monitor::RealTimeMonitor;
 use crate::thegraph::TheGraphClient;
-use crate::token::TokenManager;
+use crate::token_manager::TokenManager;
 
 // 命令行参数常量
 const UPDATE_TOKENS_ARG: &str = "update";
@@ -109,12 +108,6 @@ impl CliApp {
             return Ok(());
         }
 
-
-
-        // 正常启动模式 - 初始化完整的监控系统
-        info!("启动完整监控系统...");
-        self.start_monitoring().await?;
-
         Ok(())
     }
 
@@ -131,30 +124,6 @@ impl CliApp {
         Ok(())
     }
 
-
-
-    /// 启动完整的监控系统
-    async fn start_monitoring(&self) -> Result<()> {
-        // 初始化 Token 管理器
-        let token_manager = TokenManager::new(&self.database);
-
-        // 获取并缓存 token 列表
-        info!("获取 token 列表...");
-        let token_list = token_manager.get_tokens(None).await?;
-        info!("获取到 {} 个 token", token_list.tokens.len());
-
-        // 初始化套利监控器
-        info!("初始化套利监控器...");
-        let mut monitor = ArbitrageMonitor::new(self.config.clone()).await?;
-        monitor.start_scan().await;
-
-        // 开始监控
-        info!("开始监控套利机会...");
-        // monitor.start_monitoring().await?;
-        info!("监控系统已启动");
-
-        Ok(())
-    }
 
     async fn update_data(&self) -> Result<()> {
         self.update_tokens().await?;

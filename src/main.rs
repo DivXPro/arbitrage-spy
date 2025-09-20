@@ -1,19 +1,19 @@
 use anyhow::Result;
 use log::info;
 
+mod arbitrage_chain;
 mod cli;
 mod config;
 mod database;
 mod dex;
 mod event_listener;
 mod log_adapter;
-mod monitor;
-mod pairs;
+mod pair_manager;
 mod price_calculator;
 mod realtime_monitor;
 mod table_display;
 mod thegraph;
-mod token;
+mod token_manager;
 mod types;
 mod utils;
 

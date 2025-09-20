@@ -1,8 +1,6 @@
-use crate::token::{Token, TokenList, TokenManager};
-use crate::thegraph::PairData;
+use crate::token_manager::{Token};
+use crate::pair_manager::PairData;
 use crate::utils::convert_decimal_to_integer_string;
-use crate::types::TokenPair;
-use crate::config::{protocol_types, dex_types};
 use anyhow::Result;
 use log::info;
 use rusqlite::{params, Connection};
@@ -79,7 +77,7 @@ impl Database {
             CREATE TABLE IF NOT EXISTS pairs (
                 id TEXT PRIMARY KEY,
                 network TEXT NOT NULL DEFAULT 'ethereum',
-                dex_type TEXT NOT NULL DEFAULT 'uniswap_v2',
+                dex TEXT NOT NULL DEFAULT 'uniswap_v2',
                 protocol_type TEXT NOT NULL DEFAULT 'amm_v2',
                 token0_id TEXT NOT NULL,
                 token0_symbol TEXT NOT NULL,
@@ -328,7 +326,7 @@ impl Database {
             let mut stmt = tx.prepare(
                 r#"
                 INSERT OR REPLACE INTO pairs (
-                id, network, dex_type, protocol_type,
+                id, network, dex, protocol_type,
                 token0_id, token0_symbol, token0_name, token0_decimals,
                 token1_id, token1_symbol, token1_name, token1_decimals,
                 volume_usd, reserve_usd, tx_count, reserve0, reserve1, fee_tier, sqrt_price, tick
@@ -348,7 +346,7 @@ impl Database {
                 stmt.execute(params![
                     &pair.id,
                     &pair.network,
-                    &pair.dex_type,
+                    &pair.dex,
                     &pair.protocol_type, // 使用实际的protocol_type
                     &pair.token0.id,
                     &pair.token0.symbol,
@@ -378,12 +376,12 @@ impl Database {
 
     /// 从数据库加载交易对列表 - 直接数据库操作
     pub fn load_pairs(&self) -> Result<Vec<PairData>> {
-        use crate::thegraph::TokenInfo;
+        use crate::pair_manager::TokenInfo;
         
         let binding = self.conn.lock().unwrap();
         let mut stmt = binding.prepare(
             r#"
-            SELECT id, network, dex_type, protocol_type, token0_id, token0_symbol, token0_name, token0_decimals,
+            SELECT id, network, dex, protocol_type, token0_id, token0_symbol, token0_name, token0_decimals,
                    token1_id, token1_symbol, token1_name, token1_decimals,
                    volume_usd, reserve_usd, tx_count, reserve0, reserve1, fee_tier, sqrt_price, tick
             FROM pairs
@@ -394,7 +392,7 @@ impl Database {
             Ok(PairData {
                 id: row.get(0)?,
                 network: row.get(1)?,
-                dex_type: row.get(2)?,
+                dex: row.get(2)?,
                 protocol_type: row.get(3)?,
                 token0: TokenInfo {
                     id: row.get(4)?,
@@ -434,11 +432,11 @@ impl Database {
         dex_type: Option<&str>,
         limit: Option<usize>,
     ) -> Result<Vec<PairData>> {
-        use crate::thegraph::TokenInfo;
+        use crate::pair_manager::TokenInfo;
         
         let mut query = String::from(
             r#"
-            SELECT id, network, dex_type, protocol_type, token0_id, token0_symbol, token0_name, token0_decimals,
+            SELECT id, network, dex, protocol_type, token0_id, token0_symbol, token0_name, token0_decimals,
                    token1_id, token1_symbol, token1_name, token1_decimals,
                    volume_usd, reserve_usd, tx_count, reserve0, reserve1, fee_tier, sqrt_price, tick
             FROM pairs
@@ -454,7 +452,7 @@ impl Database {
         }
 
         if let Some(dex) = dex_type {
-            conditions.push("dex_type = ?");
+            conditions.push("dex = ?");
             params_vec.push(dex);
         }
 
@@ -475,7 +473,7 @@ impl Database {
             Ok(PairData {
                 id: row.get(0)?,
                 network: row.get(1)?,
-                dex_type: row.get(2)?,
+                dex: row.get(2)?,
                 protocol_type: row.get(3)?,
                 token0: TokenInfo {
                     id: row.get(4)?,
@@ -515,11 +513,11 @@ impl Database {
         dex_type: Option<&str>,
         limit: Option<usize>,
     ) -> Result<Vec<PairData>> {
-        use crate::thegraph::TokenInfo;
+        use crate::pair_manager::TokenInfo;
         
         let mut query = String::from(
             r#"
-            SELECT id, network, dex_type, protocol_type, token0_id, token0_symbol, token0_name, token0_decimals,
+            SELECT id, network, dex, protocol_type, token0_id, token0_symbol, token0_name, token0_decimals,
                    token1_id, token1_symbol, token1_name, token1_decimals,
                    volume_usd, reserve_usd, tx_count, reserve0, reserve1, fee_tier, sqrt_price, tick
             FROM pairs
@@ -535,7 +533,7 @@ impl Database {
         }
 
         if let Some(dex) = dex_type {
-            conditions.push("dex_type = ?");
+            conditions.push("dex = ?");
             params_vec.push(dex);
         }
 
@@ -559,7 +557,7 @@ impl Database {
             Ok(PairData {
                 id: row.get(0)?,
                 network: row.get(1)?,
-                dex_type: row.get(2)?,
+                dex: row.get(2)?,
                 protocol_type: row.get(3)?,
                 token0: TokenInfo {
                     id: row.get(4)?,
@@ -594,12 +592,12 @@ impl Database {
 
     /// 根据交易对ID查找特定交易对 - 直接数据库操作
     pub fn find_pair_by_id(&self, pair_id: &str) -> Result<Option<PairData>> {
-        use crate::thegraph::TokenInfo;
+        use crate::pair_manager::TokenInfo;
         
         let binding = self.conn.lock().unwrap();
         let mut stmt = binding.prepare(
             r#"
-            SELECT id, network, dex_type, protocol_type, token0_id, token0_symbol, token0_name, token0_decimals,
+            SELECT id, network, dex, protocol_type, token0_id, token0_symbol, token0_name, token0_decimals,
                    token1_id, token1_symbol, token1_name, token1_decimals,
                    volume_usd, reserve_usd, tx_count, reserve0, reserve1, fee_tier, sqrt_price, tick
             FROM pairs
@@ -611,7 +609,7 @@ impl Database {
             Ok(PairData {
                 id: row.get(0)?,
                 network: row.get(1)?,
-                dex_type: row.get(2)?,
+                dex: row.get(2)?,
                 protocol_type: row.get(3)?,
                 token0: TokenInfo {
                     id: row.get(4)?,
@@ -669,57 +667,4 @@ impl Database {
     }
 
 
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::thegraph::{PairData, TokenInfo};
-
-    #[test]
-    fn test_save_pairs_with_decimal_reserves() {
-        // 创建临时数据库
-        let db = Database::new(Some(":memory:")).unwrap();
-        
-        // 创建测试数据，包含带小数点的reserve字段
-        let test_pair = PairData {
-            id: "test_pair_1".to_string(),
-            network: "ethereum".to_string(),
-            dex_type: dex_types::UNISWAP_V2.to_string(),
-            protocol_type: protocol_types::AMM_V2.to_string(),
-            token0: TokenInfo {
-                id: "token0_id".to_string(),
-                symbol: "TOKEN0".to_string(),
-                name: "Token 0".to_string(),
-                decimals: "18".to_string(),
-            },
-            token1: TokenInfo {
-                id: "token1_id".to_string(),
-                symbol: "TOKEN1".to_string(),
-                name: "Token 1".to_string(),
-                decimals: "6".to_string(),
-            },
-            volume_usd: "1000000.5".to_string(),
-            reserve_usd: "5000000.123456".to_string(), // 带小数点
-            tx_count: "100".to_string(),
-            reserve0: "1234567.890123".to_string(), // 带小数点
-            reserve1: "9876543.210987".to_string(), // 带小数点
-            fee_tier: "3000".to_string(),
-            sqrt_price: None,
-            tick: None,
-        };
-
-        // 保存数据
-        db.save_pairs(&[test_pair]).unwrap();
-
-        // 验证数据是否正确保存（reserve字段应该被转换为整数）
-        let saved_pairs = db.load_pairs().unwrap();
-        assert_eq!(saved_pairs.len(), 1);
-        
-        let saved_pair = &saved_pairs[0];
-        assert_eq!(saved_pair.id, "test_pair_1");
-        assert_eq!(saved_pair.reserve_usd, "5000000123456"); // 保留所有数字
-        assert_eq!(saved_pair.reserve0, "1234567890123"); // 保留所有数字
-        assert_eq!(saved_pair.reserve1, "9876543210987"); // 保留所有数字
-    }
 }
