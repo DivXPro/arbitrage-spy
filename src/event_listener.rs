@@ -10,10 +10,10 @@ use std::sync::Arc;
 use std::collections::HashMap;
 use std::env;
 
-use crate::database::Database;
+use crate::data::database::Database;
 use crate::price_calculator::PriceCalculator;
 use crate::table_display::{DisplayMessage, PairDisplay, PairDisplayConverter};
-use crate::pair_manager::PairData;
+use crate::data::pair_manager::PairData;
 use crate::config::{protocol_types, dex_types};
 use chrono;
 
@@ -572,7 +572,7 @@ impl EventListener {
 
     async fn fetch_and_process_data_static(database: &Database, count: usize) -> Result<Vec<PairDisplay>> {
         // 从数据库获取最新的交易对数据
-        let pair_manager = crate::pair_manager::PairManager::new(&database);
+        let pair_manager = crate::data::pair_manager::PairManager::new(&database);
         let pairs = pair_manager.load_pairs_by_filter(None, None, Some(count))?;
         
         // 转换为显示格式（使用统一的转换工具）

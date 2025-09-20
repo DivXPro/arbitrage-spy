@@ -3,11 +3,11 @@ use log::info;
 use tokio::sync::mpsc;
 
 use crate::config::{dex_types, Config};
-use crate::database::Database;
+use crate::data::database::Database;
 use crate::event_listener::EventListener;
 use crate::log_adapter::LogAdapter;
 use crate::table_display::{DisplayMessage, TableDisplay, PairDisplay, PairDisplayConverter};
-use crate::pair_manager::PairData;
+use crate::data::pair_manager::PairData;
 
 pub struct RealTimeMonitor {
     config: Config,
@@ -35,7 +35,7 @@ impl RealTimeMonitor {
         
         // 准备初始数据
         println!("正在获取初始交易对数据...");
-        let pair_manager = crate::pair_manager::PairManager::new(&self.database);
+        let pair_manager = crate::data::pair_manager::PairManager::new(&self.database);
         let initial_pairs = pair_manager.load_pairs_by_value(None, Some(dex_types::UNISWAP_V3), Some(count.min(100)))?;
         println!("获取到 {} 个初始交易对", initial_pairs.len());
         let initial_data = self.convert_pairs_to_display(&initial_pairs)?;

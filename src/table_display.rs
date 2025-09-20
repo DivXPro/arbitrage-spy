@@ -18,7 +18,7 @@ use tokio::sync::mpsc;
 use log::{info};
 use chrono;
 use crate::price_calculator::PriceCalculator;
-use crate::pair_manager::PairData;
+use crate::data::pair_manager::PairData;
 
 #[derive(Clone, Debug)]
 pub struct PairDisplay {
