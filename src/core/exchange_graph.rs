@@ -8,7 +8,7 @@ use crate::core::types::{TokenPair, Price};
 
 /// 图中的边，表示一次代币交换
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ArbitrageEdge {
+pub struct ExchangeEdge {
     pub from_token: String,         // 源代币符号
     pub to_token: String,           // 目标代币符号
     pub dex: String,                // 去中心化交易所名称
@@ -22,7 +22,7 @@ pub struct ArbitrageEdge {
 /// 价格图，用于存储所有代币间的交换关系
 pub struct ExchangeGraph {
     /// 邻接表：token -> [(to_token, edge)]
-    pub adjacency_list: HashMap<String, Vec<ArbitrageEdge>>, // 代币交换关系的邻接表
+    pub adjacency_list: HashMap<String, Vec<ExchangeEdge>>, // 代币交换关系的邻接表
     pub tokens: HashSet<String>,                             // 所有代币符号的集合
     pub last_updated: DateTime<Utc>,         // 最后更新时间
 }
@@ -59,7 +59,7 @@ impl ExchangeGraph {
                 }
 
                 // 添加正向边 (token_a -> token_b)
-                let forward_edge = ArbitrageEdge {
+                let forward_edge = ExchangeEdge {
                     from_token: token_pair.token_a.symbol.clone(),
                     to_token: token_pair.token_b.symbol.clone(),
                     dex: dex_name.clone(),
@@ -72,7 +72,7 @@ impl ExchangeGraph {
 
                 // 添加反向边 (token_b -> token_a)
                 let reverse_rate = BigDecimal::from(1) / &price.price;
-                let reverse_edge = ArbitrageEdge {
+                let reverse_edge = ExchangeEdge {
                     from_token: token_pair.token_b.symbol.clone(),
                     to_token: token_pair.token_a.symbol.clone(),
                     dex: dex_name.clone(),
@@ -95,7 +95,7 @@ impl ExchangeGraph {
         Ok(())
     }
 
-    pub fn add_edge(&mut self, edge: ArbitrageEdge) {
+    pub fn add_edge(&mut self, edge: ExchangeEdge) {
         self.tokens.insert(edge.from_token.clone());
         self.tokens.insert(edge.to_token.clone());
         
@@ -149,7 +149,7 @@ impl ExchangeGraph {
     }
 
     /// 获取指定代币的所有出边
-    pub fn get_edges_from(&self, token: &str) -> Option<&Vec<ArbitrageEdge>> {
+    pub fn get_edges_from(&self, token: &str) -> Option<&Vec<ExchangeEdge>> {
         self.adjacency_list.get(token)
     }
 

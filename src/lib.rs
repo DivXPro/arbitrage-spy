@@ -16,6 +16,6 @@ pub mod table_display;
 pub mod utils;
 
 // 重新导出常用类型
-pub use core::{ArbitrageChain, ArbitrageChainFinder, ArbitrageHop, ArbitrageEdge, ExchangeGraph, ArbitrageOpportunity, Pool, Token as TypesToken, TokenPair};
+pub use core::{ArbitrageChain, ArbitrageChainFinder, ArbitrageHop, ExchangeEdge, ExchangeGraph, ArbitrageOpportunity, Pool, Token as TypesToken, TokenPair};
 pub use config::Config;
 pub use data::{Database, PairManager, Token, TokenList, TokenManager};

@@ -4,7 +4,7 @@ use anyhow::{Result, anyhow};
 use serde::{Deserialize, Serialize};
 use log::{info, warn, debug};
 use crate::core::types::{Price, TokenPair};
-use crate::core::exchange_graph::{ArbitrageEdge, ExchangeGraph};
+use crate::core::exchange_graph::{ExchangeEdge, ExchangeGraph};
 
 #[cfg(test)]
 use std::str::FromStr;
@@ -12,7 +12,7 @@ use std::str::FromStr;
 /// 套利路径中的一跳
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ArbitrageHop {
-    pub edge: ArbitrageEdge,        // 交换边信息
+    pub edge: ExchangeEdge,        // 交换边信息
     pub amount_in: BigDecimal,      // 输入金额
     pub amount_out: BigDecimal,     // 输出金额
     pub cumulative_gas: BigDecimal, // 累计Gas费用
@@ -205,7 +205,7 @@ impl ArbitrageChainFinder {
         // 获取当前代币的所有出边
         if let Some(edges) = graph.get_edges_from(current_token) {
             // 性能优化：对边进行排序，优先处理高质量的边
-            let mut sorted_edges: Vec<&ArbitrageEdge> = edges.iter().collect();
+            let mut sorted_edges: Vec<&ExchangeEdge> = edges.iter().collect();
             if self.enable_early_pruning {
                 sorted_edges.sort_by(|a, b| {
                     // 综合评分：汇率 * 流动性权重 - 风险权重
@@ -267,7 +267,7 @@ impl ArbitrageChainFinder {
 
     fn is_edge_acceptable(
         &self, 
-        edge: &ArbitrageEdge, 
+        edge: &ExchangeEdge, 
         visited: &HashSet<String>, 
         start_token: &str, 
         depth: usize
@@ -290,7 +290,7 @@ impl ArbitrageChainFinder {
         true
     }
 
-    fn calculate_amount_after_swap(&self, amount_in: &BigDecimal, edge: &ArbitrageEdge) -> Result<BigDecimal> {
+    fn calculate_amount_after_swap(&self, amount_in: &BigDecimal, edge: &ExchangeEdge) -> Result<BigDecimal> {
         // 应用交易费用
         let amount_after_fee = amount_in * (BigDecimal::from(1) - BigDecimal::from_f64(edge.fee_percentage).unwrap_or_default());
         
@@ -311,7 +311,7 @@ impl ArbitrageChainFinder {
         current_gas + additional_gas
     }
 
-    fn calculate_cumulative_fees(&self, current_path: &[ArbitrageHop], amount_in: &BigDecimal, edge: &ArbitrageEdge) -> BigDecimal {
+    fn calculate_cumulative_fees(&self, current_path: &[ArbitrageHop], amount_in: &BigDecimal, edge: &ExchangeEdge) -> BigDecimal {
         let current_fees = current_path.iter()
             .map(|hop| &hop.cumulative_fees)
             .fold(BigDecimal::from(0), |acc, fees| acc + fees);
@@ -410,7 +410,7 @@ impl ArbitrageChainFinder {
         base_time + (path.len() as u64 * per_hop_time) + dex_delays
     }
 
-    fn calculate_edge_priority_score(&self, edge: &ArbitrageEdge) -> f64 {
+    fn calculate_edge_priority_score(&self, edge: &ExchangeEdge) -> f64 {
         // 汇率权重
         let rate_score = edge.exchange_rate.to_f64().unwrap_or(0.0);
         
@@ -473,7 +473,7 @@ mod tests {
     fn test_edge_priority_scoring() {
         let finder = ArbitrageChainFinder::new(3, 1.0, 0.05, 1000.0, 0.8);
         
-        let high_quality_edge = ArbitrageEdge {
+        let high_quality_edge = ExchangeEdge {
             from_token: "USDC".to_string(),
             to_token: "USDT".to_string(),
             dex: "uniswap_v2".to_string(),
@@ -484,7 +484,7 @@ mod tests {
             fee_percentage: 0.003,
         };
         
-        let low_quality_edge = ArbitrageEdge {
+        let low_quality_edge = ExchangeEdge {
             from_token: "USDC".to_string(),
             to_token: "SHIB".to_string(),
             dex: "sushiswap".to_string(),
@@ -520,7 +520,7 @@ mod tests {
         
         // 添加多个代币和边
         for i in 0..100 {
-            let edge = ArbitrageEdge {
+            let edge = ExchangeEdge {
                 from_token: format!("TOKEN{}", i),
                 to_token: format!("TOKEN{}", (i + 1) % 100),
                 dex: "test_dex".to_string(),
