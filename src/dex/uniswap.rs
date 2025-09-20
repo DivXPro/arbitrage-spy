@@ -27,8 +27,6 @@ pub struct UniswapProvider {
 
 impl UniswapProvider {
     pub fn new(config: DexConfig) -> Self {
-        Self::print_config_info(&config);
-
         // 初始化 Web3 提供者
         let web3_provider = Arc::new(
             Provider::<Http>::try_from(&config.api_url).expect("Failed to create Web3 provider"),
@@ -164,25 +162,7 @@ impl UniswapProvider {
         }))
     }
 
-    /// 打印 Uniswap DEX 配置信息
-    fn print_config_info(config: &DexConfig) {
-        println!("Uniswap DEX 配置信息:");
-        println!("  名称: {}", config.name);
-        println!("  API URL: {}", config.api_url);
-        println!("  启用状态: {}", config.enabled);
-        println!("  链 ID: {}", config.chain_id);
-        if let Some(ref factory_address) = config.factory_address {
-            println!("  工厂合约地址: {}", factory_address);
-        } else {
-            println!("  工厂合约地址: 未配置");
-        }
-        if let Some(ref router_address) = config.router_address {
-            println!("  路由合约地址: {}", router_address);
-        } else {
-            println!("  路由合约地址: 未配置");
-        }
-        println!("  请求限制间隔: {} ms", config.rate_limit_ms);
-    }
+
 }
 
 #[async_trait]

@@ -138,25 +138,23 @@ impl TableDisplay {
 
     
     pub async fn start_display(&mut self) -> Result<()> {
-        // 启用原始模式并进入备用屏幕
+        // 启用原始模式
         terminal::enable_raw_mode()?;
+        
+        // 进入备用屏幕
         execute!(io::stdout(), EnterAlternateScreen)?;
         
-        // 使用初始数据作为当前显示的数据
-        let mut current_pairs = self.initial_data.clone();
-        
         // 初始渲染
-        let visible_pairs = self.get_visible_pairs(&current_pairs);
+        let visible_pairs = self.get_visible_pairs(&self.initial_data);
         self.terminal.draw(|f| {
             if self.show_logs {
-                Self::render_ui_with_logs(f, &current_pairs, &mut self.tui_logger_state);
+                Self::render_ui_with_logs(f, &self.initial_data, &mut self.tui_logger_state);
             } else {
-                Self::render_ui_static(f, &visible_pairs, self.scroll_offset, current_pairs.len(), self.visible_rows);
+                Self::render_ui_static(f, &visible_pairs, self.scroll_offset, self.initial_data.len(), self.visible_rows);
             }
         })?;
         
-        info!("🚀 TableDisplay 已启动，显示 {} 个初始交易对", current_pairs.len());
-        println!("🚀 TableDisplay 已启动，显示 {} 个初始交易对", current_pairs.len());
+        let mut current_pairs = self.initial_data.clone();
         
         loop {
             tokio::select! {
@@ -201,11 +199,16 @@ impl TableDisplay {
                                  }
                             });
                         }
-                        Some(DisplayMessage::Shutdown) => break,
-                        None => break,
+                        Some(DisplayMessage::Shutdown) => {
+                            break;
+                        }
+                        None => {
+                            break;
+                        }
                     }
                 }
                 _ = tokio::time::sleep(Duration::from_millis(100)) => {
+                    // 检查是否有键盘事件
                     if event::poll(Duration::from_millis(0))? {
                         if let Event::Key(key) = event::read()? {
                             match key.code {
@@ -270,7 +273,6 @@ impl TableDisplay {
         // 恢复终端状态
         terminal::disable_raw_mode()?;
         execute!(io::stdout(), LeaveAlternateScreen)?;
-        println!("表格显示已停止");
         
         Ok(())
     }

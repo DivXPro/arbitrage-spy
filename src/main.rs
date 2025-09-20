@@ -1,5 +1,4 @@
 use anyhow::Result;
-use log::info;
 
 mod cli;
 mod config;
@@ -14,25 +13,17 @@ mod table_display;
 mod utils;
 
 use cli::CliApp;
-use log_adapter::LogAdapter;
 
 #[tokio::main]
 async fn main() -> Result<()> {
     // 加载 .env 文件
     dotenv::dotenv().ok();
 
-    // 初始化日志适配器系统（默认为终端模式）
-    LogAdapter::init().expect("Failed to initialize log adapter");
-
-    info!("启动区块链套利监控系统...");
-
     // 解析命令行参数
     let matches = CliApp::build_cli().get_matches();
 
-    // 创建CLI应用程序实例
+    // 创建CLI应用程序实例并运行（日志初始化在CLI模块中根据命令类型进行）
     let app = CliApp::new().await?;
-
-    // 运行应用程序
     app.run(matches).await?;
 
     Ok(())

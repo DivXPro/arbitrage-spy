@@ -385,7 +385,6 @@ mod tests {
         assert!(result.is_ok());
         
         let price = result.unwrap();
-        println!("Calculated price from sqrt_price: {}", price);
         // 验证价格约为1（相同小数位数的代币对）
         assert!(price > BigDecimal::from_str("0.9").unwrap() && price < BigDecimal::from_str("1.1").unwrap());
     }
@@ -399,7 +398,6 @@ mod tests {
         assert!(result.is_ok());
         
         let price = result.unwrap();
-        println!("Calculated price from tick: {}", price);
         // 验证价格约为1（tick=0时价格为1）
         assert!(price > BigDecimal::from_str("0.9").unwrap() && price < BigDecimal::from_str("1.1").unwrap());
     }

@@ -981,9 +981,6 @@ mod tests {
         
         // 验证流动性也被更新
         assert_eq!(updated_edges[0].liquidity.to_string(), "2400000");
-        
-        println!("直接更新测试通过: 初始汇率 {} -> 更新汇率 {}", 
-                 initial_rate, updated_rate);
     }
 
     #[test]

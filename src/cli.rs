@@ -8,6 +8,7 @@ use crate::data::pair_manager::PairManager;
 use crate::realtime_monitor::RealTimeMonitor;
 use crate::data::thegraph::TheGraphClient;
 use crate::data::token_manager::TokenManager;
+use crate::log_adapter::LogAdapter;
 
 // 命令行参数常量
 const UPDATE_TOKENS_ARG: &str = "update";
@@ -82,6 +83,17 @@ impl CliApp {
 
     /// 运行CLI应用程序
     pub async fn run(&self, matches: ArgMatches) -> Result<()> {
+        // 根据命令类型初始化相应的日志系统
+        if matches.get_flag(MONITOR_ARG) {
+            // 监控模式：使用TUI表格显示日志
+            LogAdapter::init_for_monitor().expect("Failed to initialize log adapter for monitor mode");
+        } else {
+            // Update命令：使用终端显示日志
+            LogAdapter::init_for_terminal().expect("Failed to initialize log adapter for terminal mode");
+        }
+
+        info!("启动区块链套利监控系统...");
+
         // 检查是否只需要更新 token
         if matches.get_flag(UPDATE_TOKENS_ARG) {
             info!("执行 token 更新命令...");
@@ -113,7 +125,7 @@ impl CliApp {
 
     /// 启动实时监控模式
     async fn start_realtime_monitor(&self, count: usize) -> Result<()> {
-        println!("正在启动实时监控...");
+        info!("正在启动实时监控...");
         
         // 创建实时监控器
         let monitor = RealTimeMonitor::new(self.config.clone(), self.database.clone()).await?;

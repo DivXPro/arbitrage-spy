@@ -18,8 +18,27 @@ static INIT_ONCE: Once = Once::new();
 pub struct LogAdapter;
 
 impl LogAdapter {
-    /// 初始化日志系统（统一使用tui_logger）
+    /// 初始化日志系统（通用方法，兼容旧版本）
     pub fn init() -> Result<(), Box<dyn std::error::Error>> {
+        Self::init_for_terminal()
+    }
+
+    /// 为终端模式初始化日志系统（用于update命令）
+    pub fn init_for_terminal() -> Result<(), Box<dyn std::error::Error>> {
+        INIT_ONCE.call_once(|| {
+            // 使用env_logger进行终端输出
+            env_logger::Builder::from_default_env()
+                .filter_level(log::LevelFilter::Info)
+                .init();
+            
+            // 设置默认为终端模式
+            Self::set_mode(LogMode::Terminal);
+        });
+        Ok(())
+    }
+
+    /// 为监控模式初始化日志系统（支持TUI表格显示）
+    pub fn init_for_monitor() -> Result<(), Box<dyn std::error::Error>> {
         INIT_ONCE.call_once(|| {
             // 统一使用tui_logger作为日志系统
             // 这样可以在表格模式和终端模式之间切换
@@ -32,13 +51,10 @@ impl LogAdapter {
             } else {
                 tui_logger::set_default_level(log::LevelFilter::Info);
             }
+            
+            // 设置默认为表格模式
+            Self::set_mode(LogMode::Table);
         });
-        Ok(())
-    }
-
-    /// 初始化为表格模式（已经使用tui_logger，无需重新初始化）
-    pub fn init_table_mode() -> Result<(), Box<dyn std::error::Error>> {
-        // 由于我们已经使用tui_logger作为主要日志系统，这里无需额外操作
         Ok(())
     }
 

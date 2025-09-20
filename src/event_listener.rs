@@ -161,6 +161,8 @@ impl EventListener {
     }
 
     async fn try_connect_to_ethereum() -> Option<Arc<Provider<ethers::providers::Ws>>> {
+        use tokio::time::{timeout, Duration};
+        
         // 从环境变量读取WebSocket端点
         let wss_urls = match env::var("WSS_URLS") {
             Ok(urls_str) => {
@@ -175,16 +177,38 @@ impl EventListener {
         };
         
         for wss_url in wss_urls {
-            match Provider::<ethers::providers::Ws>::connect(&wss_url).await {
-                Ok(provider) => {
-                    // 测试连接
-                    if let Ok(_) = provider.get_block_number().await {
-                        info!("成功连接到以太坊WebSocket节点: {}", wss_url);
-                        return Some(Arc::new(provider));
+            info!("尝试连接到WebSocket节点: {}", wss_url);
+            
+            // 为连接添加5秒超时
+            let connect_result = timeout(Duration::from_secs(5), async {
+                Provider::<ethers::providers::Ws>::connect(&wss_url).await
+            }).await;
+            
+            match connect_result {
+                Ok(Ok(provider)) => {
+                    // 为测试连接添加3秒超时
+                    let test_result = timeout(Duration::from_secs(3), async {
+                        provider.get_block_number().await
+                    }).await;
+                    
+                    match test_result {
+                        Ok(Ok(_)) => {
+                            info!("成功连接到以太坊WebSocket节点: {}", wss_url);
+                            return Some(Arc::new(provider));
+                        }
+                        Ok(Err(e)) => {
+                            warn!("WebSocket连接测试失败 {}: {}", wss_url, e);
+                        }
+                        Err(_) => {
+                            warn!("WebSocket连接测试超时: {}", wss_url);
+                        }
                     }
                 }
-                Err(e) => {
-                    info!("WebSocket连接失败 {}: {}", wss_url, e);
+                Ok(Err(e)) => {
+                    warn!("WebSocket连接失败 {}: {}", wss_url, e);
+                }
+                Err(_) => {
+                    warn!("WebSocket连接超时: {}", wss_url);
                 }
             }
         }
@@ -229,12 +253,32 @@ impl EventListener {
         let sender = self.sender.clone();
         let pairs = self.pairs.clone();
         
-        tokio::select! {
-            _ = Self::listen_v2_swap_events(v2_contracts, provider.clone(), sender.clone(), pairs.clone()) => {
-                error!("V2 Swap事件监听意外停止");
+        // 根据合约类型启动相应的监听器
+        if !v2_contracts.is_empty() && !v3_contracts.is_empty() {
+            // 同时监听V2和V3
+            tokio::select! {
+                _ = Self::listen_v2_swap_events(v2_contracts, provider.clone(), sender.clone(), pairs.clone()) => {
+                    error!("V2 Swap事件监听意外停止");
+                }
+                _ = Self::listen_v3_swap_events(v3_contracts, provider.clone(), sender.clone(), pairs.clone()) => {
+                    error!("V3 Swap事件监听意外停止");
+                }
             }
-            _ = Self::listen_v3_swap_events(v3_contracts, provider.clone(), sender.clone(), pairs.clone()) => {
-                error!("V3 Swap事件监听意外停止");
+        } else if !v2_contracts.is_empty() {
+            // 只监听V2
+            if let Err(e) = Self::listen_v2_swap_events(v2_contracts, provider.clone(), sender.clone(), pairs.clone()).await {
+                error!("V2 Swap事件监听失败: {}", e);
+            }
+        } else if !v3_contracts.is_empty() {
+            // 只监听V3
+            if let Err(e) = Self::listen_v3_swap_events(v3_contracts, provider.clone(), sender.clone(), pairs.clone()).await {
+                error!("V3 Swap事件监听失败: {}", e);
+            }
+        } else {
+            warn!("没有任何合约需要监听，事件监听器将保持运行但不监听任何事件");
+            // 保持运行，等待可能的关闭信号
+            loop {
+                tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
             }
         }
         
