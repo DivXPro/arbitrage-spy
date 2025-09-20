@@ -2,8 +2,8 @@ use anyhow::Result;
 use bigdecimal::{BigDecimal, FromPrimitive, Zero};
 use std::str::FromStr;
 use crate::data::pair_manager::PairData;
-use crate::core::types::{Price, TokenPair};
-use crate::config::{protocol_types, dex_types};
+
+use crate::config::protocol_types;
 
 /// 价格计算工具
 pub struct PriceCalculator;
@@ -270,6 +270,7 @@ impl PriceCalculator {
 mod tests {
     use super::*;
     use crate::data::pair_manager::TokenInfo;
+    use crate::config::dex_types;
     
     #[test]
     fn test_calculate_price_with_decimals() {

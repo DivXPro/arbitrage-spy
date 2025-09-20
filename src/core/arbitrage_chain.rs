@@ -474,6 +474,7 @@ mod tests {
         let finder = ArbitrageChainFinder::new(3, 1.0, 0.05, 1000.0, 0.8);
         
         let high_quality_edge = ExchangeEdge {
+            pair_id: "test_pair_1".to_string(),
             from_token: "USDC".to_string(),
             to_token: "USDT".to_string(),
             dex: "uniswap_v2".to_string(),
@@ -485,6 +486,7 @@ mod tests {
         };
         
         let low_quality_edge = ExchangeEdge {
+            pair_id: "test_pair_2".to_string(),
             from_token: "USDC".to_string(),
             to_token: "SHIB".to_string(),
             dex: "sushiswap".to_string(),
@@ -521,6 +523,7 @@ mod tests {
         // 添加多个代币和边
         for i in 0..100 {
             let edge = ExchangeEdge {
+                pair_id: format!("test_pair_{}", i),
                 from_token: format!("TOKEN{}", i),
                 to_token: format!("TOKEN{}", (i + 1) % 100),
                 dex: "test_dex".to_string(),
