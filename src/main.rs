@@ -1,9 +1,9 @@
 use anyhow::Result;
 use log::info;
 
-mod arbitrage_chain;
 mod cli;
 mod config;
+mod core;
 mod database;
 mod dex;
 mod event_listener;
@@ -14,7 +14,6 @@ mod realtime_monitor;
 mod table_display;
 mod thegraph;
 mod token_manager;
-mod types;
 mod utils;
 
 use cli::CliApp;

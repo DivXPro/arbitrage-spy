@@ -17,7 +17,7 @@ use std::time::Duration;
 
 use crate::config::DexConfig;
 use crate::dex::DexProvider;
-use crate::types::{Pool, Price, Token, TokenPair};
+use crate::core::types::{Pool, Price, Token, TokenPair};
 use crate::utils::str_to_bigdecimal;
 
 pub struct UniswapProvider {

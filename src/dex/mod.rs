@@ -6,7 +6,7 @@ pub mod balancer;
 
 use anyhow::Result;
 use async_trait::async_trait;
-use crate::types::{Pool, Price, TokenPair};
+use crate::core::types::{Pool, Price, TokenPair};
 use std::collections::HashMap;
 
 #[async_trait]

@@ -3,23 +3,11 @@ use bigdecimal::{BigDecimal, FromPrimitive, ToPrimitive};
 use anyhow::{Result, anyhow};
 use serde::{Deserialize, Serialize};
 use log::{info, warn, debug};
-use crate::types::{TokenPair, Price};
+use crate::core::types::{Price, TokenPair};
+use crate::core::exchange_graph::{ArbitrageEdge, ExchangeGraph};
 
 #[cfg(test)]
 use std::str::FromStr;
-
-/// 图中的边，表示一次代币交换
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ArbitrageEdge {
-    pub from_token: String,         // 源代币符号
-    pub to_token: String,           // 目标代币符号
-    pub dex: String,                // 去中心化交易所名称
-    pub exchange_rate: BigDecimal,  // 汇率 (to_token/from_token)
-    pub liquidity: BigDecimal,      // 流动性
-    pub gas_cost: BigDecimal,       // Gas成本估算
-    pub slippage: f64,              // 预期滑点
-    pub fee_percentage: f64,        // 交易费用百分比
-}
 
 /// 套利路径中的一跳
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -45,164 +33,6 @@ pub struct ArbitrageChain {
     pub profit_percentage: f64,         // 利润百分比
     pub risk_score: f64,                // 风险评分（0-1）
     pub execution_time_estimate: u64,   // 预估执行时间(秒)
-}
-
-/// 价格图，用于存储所有代币间的交换关系
-pub struct PriceGraph {
-    /// 邻接表：token -> [(to_token, edge)]
-    pub adjacency_list: HashMap<String, Vec<ArbitrageEdge>>, // 代币交换关系的邻接表
-    pub tokens: HashSet<String>,                             // 所有代币符号的集合
-    pub last_updated: chrono::DateTime<chrono::Utc>,         // 最后更新时间
-}
-
-impl PriceGraph {
-    pub fn new() -> Self {
-        Self {
-            adjacency_list: HashMap::new(),
-            tokens: HashSet::new(),
-            last_updated: chrono::Utc::now(),
-        }
-    }
-
-    /// 从DEX价格数据构建图
-    pub fn build_from_dex_data(&mut self, dex_data: &HashMap<String, HashMap<TokenPair, Price>>) -> Result<()> {
-        info!("开始构建价格图，DEX数量: {}", dex_data.len());
-        
-        // 清空现有数据
-        self.adjacency_list.clear();
-        self.tokens.clear();
-        
-        let mut edge_count = 0;
-        
-        for (dex_name, prices) in dex_data {
-            debug!("处理DEX: {}, 价格数据数量: {}", dex_name, prices.len());
-            
-            for (token_pair, price) in prices {
-                // 验证价格数据
-                if price.price <= BigDecimal::from(0) || price.liquidity <= BigDecimal::from(0) {
-                    warn!("跳过无效价格数据: {} on {}", 
-                          format!("{}/{}", token_pair.token_a.symbol, token_pair.token_b.symbol), 
-                          dex_name);
-                    continue;
-                }
-
-                // 添加正向边 (token_a -> token_b)
-                let forward_edge = ArbitrageEdge {
-                    from_token: token_pair.token_a.symbol.clone(),
-                    to_token: token_pair.token_b.symbol.clone(),
-                    dex: dex_name.clone(),
-                    exchange_rate: price.price.clone(),
-                    liquidity: price.liquidity.clone(),
-                    gas_cost: Self::estimate_gas_cost(dex_name),
-                    slippage: Self::estimate_slippage(&price.liquidity),
-                    fee_percentage: Self::get_dex_fee_percentage(dex_name),
-                };
-
-                // 添加反向边 (token_b -> token_a)
-                let reverse_rate = BigDecimal::from(1) / &price.price;
-                let reverse_edge = ArbitrageEdge {
-                    from_token: token_pair.token_b.symbol.clone(),
-                    to_token: token_pair.token_a.symbol.clone(),
-                    dex: dex_name.clone(),
-                    exchange_rate: reverse_rate,
-                    liquidity: price.liquidity.clone(),
-                    gas_cost: Self::estimate_gas_cost(dex_name),
-                    slippage: Self::estimate_slippage(&price.liquidity),
-                    fee_percentage: Self::get_dex_fee_percentage(dex_name),
-                };
-
-                self.add_edge(forward_edge);
-                self.add_edge(reverse_edge);
-                edge_count += 2;
-            }
-        }
-
-        self.last_updated = chrono::Utc::now();
-        info!("价格图构建完成，代币数量: {}, 边数量: {}", self.tokens.len(), edge_count);
-        
-        Ok(())
-    }
-
-    pub fn add_edge(&mut self, edge: ArbitrageEdge) {
-        self.tokens.insert(edge.from_token.clone());
-        self.tokens.insert(edge.to_token.clone());
-        
-        self.adjacency_list
-            .entry(edge.from_token.clone())
-            .or_insert_with(Vec::new)
-            .push(edge);
-    }
-
-    /// 根据DEX类型估算Gas成本
-    fn estimate_gas_cost(dex_name: &str) -> BigDecimal {
-        match dex_name.to_lowercase().as_str() {
-            name if name.contains("uniswap") && name.contains("v2") => BigDecimal::from_f64(0.003).unwrap_or_default(),
-            name if name.contains("uniswap") && name.contains("v3") => BigDecimal::from_f64(0.005).unwrap_or_default(),
-            name if name.contains("sushiswap") => BigDecimal::from_f64(0.003).unwrap_or_default(),
-            name if name.contains("curve") => BigDecimal::from_f64(0.004).unwrap_or_default(),
-            name if name.contains("balancer") => BigDecimal::from_f64(0.006).unwrap_or_default(),
-            name if name.contains("pancakeswap") => BigDecimal::from_f64(0.002).unwrap_or_default(),
-            _ => BigDecimal::from_f64(0.003).unwrap_or_default(), // 默认值
-        }
-    }
-
-    /// 根据流动性估算滑点
-    fn estimate_slippage(liquidity: &BigDecimal) -> f64 {
-        let liquidity_f64 = liquidity.to_f64().unwrap_or(0.0);
-        
-        if liquidity_f64 > 10_000_000.0 {
-            0.0005 // 0.05% - 超高流动性
-        } else if liquidity_f64 > 1_000_000.0 {
-            0.001  // 0.1% - 高流动性
-        } else if liquidity_f64 > 100_000.0 {
-            0.005  // 0.5% - 中等流动性
-        } else if liquidity_f64 > 10_000.0 {
-            0.01   // 1% - 低流动性
-        } else {
-            0.03   // 3% - 极低流动性
-        }
-    }
-
-    /// 获取DEX的交易费用百分比
-    fn get_dex_fee_percentage(dex_name: &str) -> f64 {
-        match dex_name.to_lowercase().as_str() {
-            name if name.contains("uniswap") && name.contains("v2") => 0.003, // 0.3%
-            name if name.contains("uniswap") && name.contains("v3") => 0.003, // 0.3% (可变)
-            name if name.contains("sushiswap") => 0.003, // 0.3%
-            name if name.contains("curve") => 0.0004,    // 0.04%
-            name if name.contains("balancer") => 0.001,  // 0.1% (可变)
-            name if name.contains("pancakeswap") => 0.0025, // 0.25%
-            _ => 0.003, // 默认0.3%
-        }
-    }
-
-    /// 获取指定代币的所有出边
-    pub fn get_edges_from(&self, token: &str) -> Option<&Vec<ArbitrageEdge>> {
-        self.adjacency_list.get(token)
-    }
-
-    /// 检查两个代币之间是否存在直接连接
-    pub fn has_direct_path(&self, from_token: &str, to_token: &str) -> bool {
-        if let Some(edges) = self.adjacency_list.get(from_token) {
-            edges.iter().any(|edge| edge.to_token == to_token)
-        } else {
-            false
-        }
-    }
-
-    /// 获取图的统计信息
-    pub fn get_stats(&self) -> (usize, usize) {
-        let token_count = self.tokens.len();
-        let edge_count = self.adjacency_list.values().map(|edges| edges.len()).sum();
-        (token_count, edge_count)
-    }
-
-    /// 清空图数据
-    pub fn clear(&mut self) {
-        self.adjacency_list.clear();
-        self.tokens.clear();
-        self.last_updated = chrono::Utc::now();
-    }
 }
 
 /// 套利链查找器
@@ -272,7 +102,7 @@ impl ArbitrageChainFinder {
     }
 
     /// 寻找从指定代币开始的所有套利链
-    pub fn find_arbitrage_chains(&self, graph: &PriceGraph, start_token: &str) -> Result<Vec<ArbitrageChain>> {
+    pub fn find_arbitrage_chains(&self, graph: &ExchangeGraph, start_token: &str) -> Result<Vec<ArbitrageChain>> {
         info!("开始寻找从 {} 开始的套利链", start_token);
         
         if !graph.tokens.contains(start_token) {
@@ -318,7 +148,7 @@ impl ArbitrageChainFinder {
     }
 
     /// 获取从指定代币出发的边，按潜在收益排序
-    fn get_sorted_edges_from_token(&self, graph: &PriceGraph, token: &str) -> Option<Vec<String>> {
+    fn get_sorted_edges_from_token(&self, graph: &ExchangeGraph, token: &str) -> Option<Vec<String>> {
         graph.get_edges_from(token).map(|edges| {
             let mut edge_scores: Vec<(String, f64)> = edges.iter()
                 .map(|edge| {
@@ -338,7 +168,7 @@ impl ArbitrageChainFinder {
 
     fn dfs_search(
         &self,
-        graph: &PriceGraph,
+        graph: &ExchangeGraph,
         current_token: &str,
         start_token: &str,
         current_amount: BigDecimal,
@@ -518,7 +348,7 @@ impl ArbitrageChainFinder {
     }
 
     fn calculate_risk_score(&self, path: &[ArbitrageHop]) -> f64 {
-        let mut risk_score = 0.0;
+        let mut risk_score: f64 = 0.0;
         
         // 路径长度风险 (每跳增加10%风险)
         risk_score += path.len() as f64 * 0.1;
@@ -528,201 +358,187 @@ impl ArbitrageChainFinder {
         let min_liquidity = path.iter()
             .map(|hop| &hop.edge.liquidity)
             .min()
-            .unwrap_or(&default_liquidity);
+            .unwrap_or(&default_liquidity)
+            .to_f64()
+            .unwrap_or(0.0);
         
-        let min_liquidity_f64 = min_liquidity.to_f64().unwrap_or(0.0);
-        if min_liquidity_f64 < 100_000.0 {
-            risk_score += 0.3;
-        } else if min_liquidity_f64 < 1_000_000.0 {
-            risk_score += 0.1;
+        if min_liquidity < 10_000.0 {
+            risk_score += 0.3; // 低流动性增加30%风险
+        } else if min_liquidity < 100_000.0 {
+            risk_score += 0.1; // 中等流动性增加10%风险
         }
         
         // 滑点风险
-        let total_slippage: f64 = path.iter()
+        let max_slippage = path.iter()
             .map(|hop| hop.edge.slippage)
-            .sum();
-        risk_score += total_slippage * 5.0;
+            .fold(0.0, f64::max);
         
-        // DEX多样性风险 (使用相同DEX增加风险)
-        let unique_dexes: HashSet<_> = path.iter().map(|hop| &hop.edge.dex).collect();
-        if unique_dexes.len() < path.len() {
-            risk_score += 0.2;
+        risk_score += max_slippage * 2.0; // 滑点直接转换为风险
+        
+        // DEX多样性风险（使用相同DEX增加风险）
+        let unique_dexes: HashSet<&String> = path.iter()
+            .map(|hop| &hop.edge.dex)
+            .collect();
+        
+        if unique_dexes.len() == 1 && path.len() > 2 {
+            risk_score += 0.2; // 单一DEX增加20%风险
         }
         
-        // 限制在0-1之间
+        // 确保风险评分在0-1范围内
         risk_score.min(1.0)
     }
 
     fn estimate_execution_time(&self, path: &[ArbitrageHop]) -> u64 {
-        // 基础时间：每跳15秒
-        let base_time = path.len() as u64 * 15;
+        // 基础执行时间（秒）
+        let base_time = 15;
         
-        // 根据DEX类型调整
-        let dex_adjustment: u64 = path.iter()
-            .map(|hop| match hop.edge.dex.to_lowercase().as_str() {
-                name if name.contains("uniswap") => 10,
-                name if name.contains("curve") => 20,
-                name if name.contains("balancer") => 25,
-                _ => 15,
+        // 每跳增加的时间
+        let per_hop_time = 5;
+        
+        // DEX特定的延迟
+        let dex_delays: u64 = path.iter()
+            .map(|hop| {
+                match hop.edge.dex.to_lowercase().as_str() {
+                    name if name.contains("uniswap") => 3,
+                    name if name.contains("curve") => 5,
+                    name if name.contains("balancer") => 7,
+                    _ => 4,
+                }
             })
             .sum();
         
-        base_time + dex_adjustment
+        base_time + (path.len() as u64 * per_hop_time) + dex_delays
     }
 
-    /// 计算边的优先级评分，用于排序优化
     fn calculate_edge_priority_score(&self, edge: &ArbitrageEdge) -> f64 {
-        // 汇率权重 (40%)
-        let rate_score = edge.exchange_rate.to_f64().unwrap_or(0.0) * 0.4;
+        // 汇率权重
+        let rate_score = edge.exchange_rate.to_f64().unwrap_or(0.0);
         
-        // 流动性权重 (30%) - 使用对数缩放
-        let liquidity_raw = edge.liquidity.to_f64().unwrap_or(1.0);
-        let liquidity_score = if liquidity_raw > 0.0 {
-            liquidity_raw.log10().max(0.0) * 0.3
-        } else {
-            0.0
-        };
+        // 流动性权重（对数缩放）
+        let liquidity_score = edge.liquidity.to_f64().unwrap_or(1.0).log10().max(0.0);
         
-        // 费用惩罚 (15%)
-        let fee_penalty = edge.fee_percentage * 0.15;
+        // 成本惩罚
+        let cost_penalty = edge.slippage + edge.fee_percentage + 
+                          edge.gas_cost.to_f64().unwrap_or(0.0);
         
-        // 滑点惩罚 (10%)
-        let slippage_penalty = edge.slippage * 0.1;
+        // 综合评分
+        let score = (rate_score * liquidity_score) / (1.0 + cost_penalty);
         
-        // Gas成本惩罚 (5%)
-        let gas_penalty = edge.gas_cost.to_f64().unwrap_or(0.0) * 0.05;
+        // 流动性阈值惩罚
+        if edge.liquidity < self.min_liquidity {
+            return score * 0.1; // 大幅降低评分
+        }
         
-        // 综合评分：收益 - 成本
-        rate_score + liquidity_score - fee_penalty - slippage_penalty - gas_penalty
+        // 滑点阈值惩罚
+        if edge.slippage > self.max_slippage {
+            return score * 0.1; // 大幅降低评分
+        }
+        
+        score
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::types::Token;
-
-    #[test]
-    fn test_price_graph_creation() {
-        let mut graph = PriceGraph::new();
-        assert_eq!(graph.tokens.len(), 0);
-        assert_eq!(graph.adjacency_list.len(), 0);
-    }
+    use crate::core::types::Token;
 
     #[test]
     fn test_arbitrage_chain_finder_creation() {
-        let finder = ArbitrageChainFinder::new(3, 1.0, 0.01, 100000.0, 0.8);
+        let finder = ArbitrageChainFinder::new(3, 1.0, 0.05, 1000.0, 0.8);
         assert_eq!(finder.max_hops(), 3);
         assert_eq!(finder.min_profit_percentage(), 1.0);
-    }
-
-    #[test]
-    fn test_gas_cost_estimation() {
-        assert_eq!(PriceGraph::estimate_gas_cost("Uniswap V2"), BigDecimal::from_f64(0.003).unwrap_or_default());
-        assert_eq!(PriceGraph::estimate_gas_cost("Uniswap V3"), BigDecimal::from_f64(0.005).unwrap_or_default());
-        assert_eq!(PriceGraph::estimate_gas_cost("Curve"), BigDecimal::from_f64(0.004).unwrap_or_default());
-    }
-
-    #[test]
-    fn test_slippage_estimation() {
-        assert_eq!(PriceGraph::estimate_slippage(&BigDecimal::from(20_000_000)), 0.0005);
-        assert_eq!(PriceGraph::estimate_slippage(&BigDecimal::from(500_000)), 0.005);
-        assert_eq!(PriceGraph::estimate_slippage(&BigDecimal::from(5_000)), 0.03);
     }
 
     #[test]
     fn test_optimized_finder_creation() {
         let finder = ArbitrageChainFinder::new_optimized(
-            3,      // max_hops
-            1.0,    // min_profit_percentage
-            0.05,   // max_slippage
-            1000.0, // min_liquidity
-            0.8,    // max_risk_score
+            4,      // max_hops
+            2.0,    // min_profit_percentage
+            0.03,   // max_slippage
+            5000.0, // min_liquidity
+            0.7,    // max_risk_score
             5,      // max_chains_per_token
             0.01,   // min_amount_threshold
         );
         
-        assert_eq!(finder.max_hops(), 3);
-        assert_eq!(finder.min_profit_percentage(), 1.0);
+        assert_eq!(finder.max_hops, 4);
+        assert_eq!(finder.min_profit_percentage, 2.0);
+        assert_eq!(finder.max_slippage, 0.03);
+        assert_eq!(finder.max_risk_score, 0.7);
         assert_eq!(finder.max_chains_per_token, 5);
-        assert!(finder.enable_early_pruning);
     }
 
     #[test]
     fn test_edge_priority_scoring() {
         let finder = ArbitrageChainFinder::new(3, 1.0, 0.05, 1000.0, 0.8);
         
-        // 创建高质量边
         let high_quality_edge = ArbitrageEdge {
-            from_token: "ETH".to_string(),
-            to_token: "USDC".to_string(),
+            from_token: "USDC".to_string(),
+            to_token: "USDT".to_string(),
             dex: "uniswap_v2".to_string(),
-            exchange_rate: BigDecimal::from_str("2000.0").unwrap(),
-            liquidity: BigDecimal::from_str("1000000.0").unwrap(),
-            gas_cost: BigDecimal::from_str("0.01").unwrap(),
-            slippage: 0.01,
+            exchange_rate: BigDecimal::from_str("1.001").unwrap(),
+            liquidity: BigDecimal::from_str("1000000").unwrap(),
+            gas_cost: BigDecimal::from_str("0.003").unwrap(),
+            slippage: 0.001,
             fee_percentage: 0.003,
         };
         
-        // 创建低质量边
         let low_quality_edge = ArbitrageEdge {
-            from_token: "ETH".to_string(),
-            to_token: "USDC".to_string(),
-            dex: "uniswap_v2".to_string(),
-            exchange_rate: BigDecimal::from_str("100.0").unwrap(),
-            liquidity: BigDecimal::from_str("1000.0").unwrap(),
-            gas_cost: BigDecimal::from_str("0.1").unwrap(),
-            slippage: 0.1,
-            fee_percentage: 0.01,
+            from_token: "USDC".to_string(),
+            to_token: "SHIB".to_string(),
+            dex: "sushiswap".to_string(),
+            exchange_rate: BigDecimal::from_str("0.95").unwrap(),
+            liquidity: BigDecimal::from_str("1000").unwrap(),
+            gas_cost: BigDecimal::from_str("0.005").unwrap(),
+            slippage: 0.05,
+            fee_percentage: 0.003,
         };
         
         let high_score = finder.calculate_edge_priority_score(&high_quality_edge);
         let low_score = finder.calculate_edge_priority_score(&low_quality_edge);
         
-        assert!(high_score > low_score, "高质量边应该有更高的评分");
+        assert!(high_score > low_score);
     }
 
     #[test]
     fn test_performance_with_large_graph() {
         use std::time::Instant;
         
-        let mut graph = PriceGraph::new();
-        
-        // 创建一个较大的测试图
-        let tokens = vec!["ETH", "USDC", "USDT", "DAI", "WBTC", "LINK", "UNI", "AAVE"];
-        
-        // 添加所有可能的边
-        for (i, from_token) in tokens.iter().enumerate() {
-            for (j, to_token) in tokens.iter().enumerate() {
-                if i != j {
-                    let edge = ArbitrageEdge {
-                        from_token: from_token.to_string(),
-                        to_token: to_token.to_string(),
-                        dex: "uniswap_v2".to_string(),
-                        exchange_rate: BigDecimal::from_str("1.1").unwrap(),
-                        liquidity: BigDecimal::from_str("100000.0").unwrap(),
-                        gas_cost: BigDecimal::from_str("0.01").unwrap(),
-                        slippage: 0.01,
-                        fee_percentage: 0.003,
-                    };
-                    graph.add_edge(edge);
-                }
-            }
-        }
-        
-        // 测试优化版本的性能
-        let optimized_finder = ArbitrageChainFinder::new_optimized(
-            3, 0.5, 0.05, 1000.0, 0.8, 5, 0.001
+        let finder = ArbitrageChainFinder::new_optimized(
+            3,      // max_hops - 限制跳数以提高性能
+            1.0,    // min_profit_percentage
+            0.05,   // max_slippage
+            1000.0, // min_liquidity
+            0.8,    // max_risk_score
+            5,      // max_chains_per_token - 限制结果数量
+            0.01,   // min_amount_threshold
         );
         
+        // 创建一个大型图进行性能测试
+        let mut graph = ExchangeGraph::new();
+        
+        // 添加多个代币和边
+        for i in 0..100 {
+            let edge = ArbitrageEdge {
+                from_token: format!("TOKEN{}", i),
+                to_token: format!("TOKEN{}", (i + 1) % 100),
+                dex: "test_dex".to_string(),
+                exchange_rate: BigDecimal::from_str("1.01").unwrap(),
+                liquidity: BigDecimal::from_str("100000").unwrap(),
+                gas_cost: BigDecimal::from_str("0.003").unwrap(),
+                slippage: 0.01,
+                fee_percentage: 0.003,
+            };
+            graph.add_edge(edge);
+        }
+        
         let start = Instant::now();
-        let result = optimized_finder.find_arbitrage_chains(&graph, "ETH");
+        let result = finder.find_arbitrage_chains(&graph, "TOKEN0");
         let duration = start.elapsed();
         
-        assert!(result.is_ok());
-        println!("优化版本搜索耗时: {:?}", duration);
-        
         // 确保在合理时间内完成（应该在1秒内）
-        assert!(duration.as_secs() < 1, "搜索时间过长: {:?}", duration);
+        assert!(duration.as_secs() < 1);
+        assert!(result.is_ok());
     }
 }

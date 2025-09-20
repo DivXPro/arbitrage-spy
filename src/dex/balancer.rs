@@ -15,7 +15,7 @@ use std::time::Duration;
 
 use crate::config::DexConfig;
 use crate::dex::DexProvider;
-use crate::types::{Pool, Price, Token, TokenPair};
+use crate::core::types::{Pool, Price, Token, TokenPair};
 use crate::utils::{adjust_for_decimals, str_to_bigdecimal};
 
 pub struct BalancerProvider {

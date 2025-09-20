@@ -2,7 +2,7 @@ use anyhow::Result;
 use bigdecimal::{BigDecimal, FromPrimitive, Zero};
 use std::str::FromStr;
 use crate::pair_manager::PairData;
-use crate::types::{Price, TokenPair};
+use crate::core::types::{Price, TokenPair};
 use crate::config::{protocol_types, dex_types};
 
 /// 价格计算工具
