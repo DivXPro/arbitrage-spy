@@ -3,6 +3,7 @@ use clap::{Arg, Command, ArgMatches};
 use log::{error, info};
 
 use crate::config::Config;
+use crate::core::ArbitrageTrade;
 use crate::data::database::Database;
 use crate::data::pair_manager::PairManager;
 use crate::realtime_monitor::RealTimeMonitor;
@@ -14,6 +15,7 @@ use crate::log_adapter::LogAdapter;
 const UPDATE_TOKENS_ARG: &str = "update";
 const UPDATE_PAIRS_ARG: &str = "update-pairs";
 const MONITOR_ARG: &str = "monitor";
+const GRAPH_ARG: &str = "graph";
 
 /// CLI应用程序结构
 pub struct CliApp {
@@ -41,44 +43,80 @@ impl CliApp {
         Command::new("arbitrage-spy")
             .version("1.0")
             .about("区块链套利监控系统")
-            .arg(
-                Arg::new(UPDATE_TOKENS_ARG)
-                    .long(UPDATE_TOKENS_ARG)
-                    .help("更新 token 数据")
-                    .action(clap::ArgAction::SetTrue),
-            )
-            .arg(
-                Arg::new(UPDATE_PAIRS_ARG)
-                    .long(UPDATE_PAIRS_ARG)
-                    .help("更新交易对数据")
-                    .action(clap::ArgAction::SetTrue),
-            )
-            .arg(
-                Arg::new(MONITOR_ARG)
-                    .long(MONITOR_ARG)
-                    .short('m')
-                    .help("启动实时监控模式")
-                    .action(clap::ArgAction::SetTrue),
-            )
-            .arg(
-                Arg::new("count")
-                    .long("count")
-                    .short('c')
-                    .help("显示的交易对数量 (默认: 100)")
-                    .value_name("NUMBER")
-                    .default_value("100")
-                    .requires(MONITOR_ARG),
-            )
-            .arg(
-                Arg::new("interval")
-                    .long("interval")
-                    .short('i')
-                    .help("更新间隔秒数 (默认: 1)")
-                    .value_name("SECONDS")
-                    .default_value("1")
-                    .requires(MONITOR_ARG),
-            )
+            // 数据更新相关命令
+            .args(Self::build_update_args())
+            // 监控相关命令
+            .args(Self::build_monitor_args())
+            // 图构建相关命令
+            .args(Self::build_graph_args())
+    }
 
+    /// 构建数据更新相关的命令参数
+    fn build_update_args() -> Vec<Arg> {
+        vec![
+            Arg::new(UPDATE_TOKENS_ARG)
+                .long(UPDATE_TOKENS_ARG)
+                .help("更新 token 数据")
+                .action(clap::ArgAction::SetTrue),
+            
+            Arg::new(UPDATE_PAIRS_ARG)
+                .long(UPDATE_PAIRS_ARG)
+                .help("更新交易对数据")
+                .action(clap::ArgAction::SetTrue),
+        ]
+    }
+
+    /// 构建监控相关的命令参数
+    fn build_monitor_args() -> Vec<Arg> {
+        vec![
+            Arg::new(MONITOR_ARG)
+                .long(MONITOR_ARG)
+                .short('m')
+                .help("启动实时监控模式")
+                .action(clap::ArgAction::SetTrue),
+            
+            Arg::new("count")
+                .long("count")
+                .short('c')
+                .help("显示的交易对数量 (默认: 100)")
+                .value_name("NUMBER")
+                .default_value("100")
+                .requires(MONITOR_ARG),
+            
+            Arg::new("interval")
+                .long("interval")
+                .short('i')
+                .help("更新间隔秒数 (默认: 1)")
+                .value_name("SECONDS")
+                .default_value("1")
+                .requires(MONITOR_ARG),
+        ]
+    }
+
+    /// 构建图构建相关的命令参数
+    fn build_graph_args() -> Vec<Arg> {
+        vec![
+            Arg::new(GRAPH_ARG)
+                .long(GRAPH_ARG)
+                .short('g')
+                .help("从数据库读取交易对并生成ExchangeGraph")
+                .action(clap::ArgAction::SetTrue),
+            
+            Arg::new("protocol")
+                .long("protocol")
+                .short('p')
+                .help("指定协议类型 (v2, v3, all)")
+                .value_name("PROTOCOL")
+                .default_value("v3")
+                .requires(GRAPH_ARG),
+            
+            Arg::new("network")
+                .long("network")
+                .short('n')
+                .help("指定网络")
+                .value_name("NETWORK")
+                .requires(GRAPH_ARG),
+        ]
     }
 
     /// 运行CLI应用程序
@@ -105,6 +143,16 @@ impl CliApp {
         if matches.get_flag(UPDATE_PAIRS_ARG) {
             info!("执行交易对更新命令...");
             self.update_pairs().await?;
+            return Ok(());
+        }
+
+        // 检查是否执行graph命令
+        if matches.get_flag(GRAPH_ARG) {
+            let protocol = matches.get_one::<String>("protocol").unwrap();
+            let network = matches.get_one::<String>("network");
+            
+            info!("执行graph命令...");
+            self.build_exchange_graph(protocol, network).await?;
             return Ok(());
         }
 
@@ -251,6 +299,34 @@ impl CliApp {
                 error!("从数据库获取 token 列表失败: {}", e);
             }
         }
+
+        Ok(())
+    }
+
+    /// 构建ExchangeGraph
+    async fn build_exchange_graph(&self, protocol: &str, network: Option<&String>) -> Result<()> {
+        info!("开始构建ExchangeGraph，协议: {}, 网络: {:?}", protocol, network);
+
+        let graph = match (protocol, network) {
+            ("v3", None) => {
+                info!("构建V3协议的ExchangeGraph...");
+                ArbitrageTrade::build_v3_exchange_graph(&self.database).await?
+            },
+            _ => {
+                error!("不支持的协议类型: {}", protocol);
+                return Ok(());
+            }
+        };
+
+        let (token_count, edge_count) = ArbitrageTrade::get_graph_stats(&graph);
+        info!("ExchangeGraph构建完成！");
+        info!("统计信息:");
+        info!("  - 代币数量: {}", token_count);
+        info!("  - 边数量: {}", edge_count);
+        info!("  - 最后更新时间: {}", graph.last_updated);
+
+        // 可以在这里添加更多的图分析功能
+        // 例如：寻找套利机会、分析流动性等
 
         Ok(())
     }
