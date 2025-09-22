@@ -1,4 +1,3 @@
-use std::path;
 use std::sync::Arc;
 
 use anyhow::Result;
@@ -6,7 +5,7 @@ use log::{info, warn, debug};
 use crate::core::exchange_graph::ExchangeGraph;
 use crate::data::database::Database;
 use crate::data::pair_manager::{PairManager, PairData};
-use crate::data::blockchain_client::{BlockchainClient, NetworkConfig};
+use crate::data::blockchain_client::{BlockchainClient};
 use crate::data::uniswap_v3_client::UniswapV3Client;
 use crate::config::{dex_types};
 use ethers::prelude::*;
@@ -114,7 +113,7 @@ impl ArbitrageTrade {
         Self::update_pairs_from_blockchain(&mut v3_pairs).await?;
         
         // 使用ExchangeGraph的from_pair_data方法构建图
-        graph.from_pair_data(&v3_pairs)?;
+        graph.from_pair_data(&v3_pairs, None).await?;
         
         info!("V3交易对图构建完成，代币数量: {}, 边数量: {}", 
               graph.tokens.len(), 

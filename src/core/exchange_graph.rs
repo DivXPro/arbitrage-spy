@@ -6,10 +6,17 @@ use anyhow::{Result, anyhow};
 use serde::{Deserialize, Serialize};
 use log::{info, warn, debug};
 use chrono::{DateTime, Utc};
+use tokio::sync::mpsc;
+use ethers::{
+    prelude::*,
+    providers::{Provider, StreamExt},
+    types::{Filter, Log, H160, U256, I256},
+};
 use crate::core::types::{TokenPair, Price};
 use crate::data::pair_manager::PairData;
 use crate::price_calculator::PriceCalculator;
 use crate::config::protocol_types;
+use crate::event_listener::{EventListener, EventType};
 
 /// 套利路径结构体
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -541,8 +548,12 @@ impl ExchangeGraph {
         self.pairs.get(pair_id).cloned()
     }
 
-    /// 从PairData数据构建图
-    pub fn from_pair_data(&mut self, pair_data: &[PairData]) -> Result<()> {
+    /// 从PairData数据构建图，可选择启动Swap事件监听
+    pub async fn from_pair_data(
+        &mut self, 
+        pair_data: &[PairData],
+        event_sender: Option<mpsc::Sender<EventType>>
+    ) -> Result<()> {
         info!("开始从PairData构建价格图，交易对数量: {}", pair_data.len());
         
         // 清空现有数据
@@ -592,8 +603,10 @@ impl ExchangeGraph {
                     self.add_edge(reverse_edge);
                     edge_count += 2;
                     
-                    // 将PairData存储到pairs字段中
-                    self.pairs.insert(pair.id.clone(), Arc::new(pair.clone()));
+                    // 使用新的process_and_store_pair方法处理pair存储和事件监听
+                    if let Err(e) = self.process_and_store_pair(pair, event_sender.clone()).await {
+                        warn!("处理交易对 {} 失败: {}", pair.id, e);
+                    }
                 }
                 Err(e) => {
                     warn!("跳过创建边失败的交易对 {} => {} : {}", pair.token0.symbol, pair.token1.symbol, e);
@@ -735,6 +748,165 @@ impl ExchangeGraph {
         info!("交易对 {} 更新完成", pair.id);
         
         Ok(())
+    }
+
+    /// 处理并存储交易对数据，同时启动Swap事件监听
+    /// 这个方法将pair存储到graph中，并为该pair启动链上Swap事件监听
+    pub async fn process_and_store_pair(
+        &mut self, 
+        pair: &PairData,
+        event_sender: Option<mpsc::Sender<EventType>>
+    ) -> Result<()> {
+        info!("处理并存储交易对: {} ({} <-> {})", pair.id, pair.token0.symbol, pair.token1.symbol);
+        
+        // 存储PairData到pairs字段中
+        self.pairs.insert(pair.id.clone(), Arc::new(pair.clone()));
+        
+        // 如果提供了事件发送器，启动该pair的Swap事件监听
+        if let Some(sender) = event_sender {
+            if let Ok(pair_address) = pair.id.parse::<H160>() {
+                info!("为交易对 {} 启动Swap事件监听", pair.id);
+                
+                // 启动异步任务监听该pair的Swap事件
+                let pair_clone = pair.clone();
+                let pair_id = pair.id.clone();
+                let sender_clone = sender.clone();
+                
+                tokio::spawn(async move {
+                    if let Err(e) = Self::start_pair_swap_listener(pair_clone, pair_address, sender_clone).await {
+                        warn!("交易对 {} 的Swap事件监听启动失败: {}", pair_id, e);
+                    }
+                });
+            } else {
+                warn!("无效的交易对地址，无法启动事件监听: {}", pair.id);
+            }
+        }
+        
+        debug!("交易对 {} 处理完成，已存储到graph中", pair.id);
+        Ok(())
+    }
+
+    /// 为单个交易对启动Swap事件监听
+    async fn start_pair_swap_listener(
+        pair: PairData,
+        pair_address: H160,
+        event_sender: mpsc::Sender<EventType>
+    ) -> Result<()> {
+        // 尝试连接到以太坊节点
+        let ws_url = std::env::var("ETHEREUM_WS_URL")
+            .unwrap_or_else(|_| "wss://mainnet.infura.io/ws/v3/YOUR_PROJECT_ID".to_string());
+        
+        let provider = match Provider::<ethers::providers::Ws>::connect(&ws_url).await {
+            Ok(provider) => Arc::new(provider),
+            Err(e) => {
+                warn!("无法连接到以太坊节点: {}", e);
+                return Ok(());
+            }
+        };
+
+        // 根据协议类型创建相应的事件过滤器
+        let filter = if pair.protocol_type == protocol_types::AMM_V2 {
+            // V2 Swap事件签名: Swap(address,uint256,uint256,uint256,uint256,address)
+            Filter::new()
+                .event("Swap(address,uint256,uint256,uint256,uint256,address)")
+                .address(pair_address)
+                .from_block(BlockNumber::Latest)
+        } else if pair.protocol_type == protocol_types::AMM_V3 {
+            // V3 Swap事件签名: Swap(address,address,int256,int256,uint160,uint128,int24)
+            Filter::new()
+                .event("Swap(address,address,int256,int256,uint160,uint128,int24)")
+                .address(pair_address)
+                .from_block(BlockNumber::Latest)
+        } else {
+            warn!("不支持的协议类型: {}", pair.protocol_type);
+            return Ok(());
+        };
+
+        info!("开始监听交易对 {} 的Swap事件 (协议: {})", pair.id, pair.protocol_type);
+        
+        // 订阅事件流
+        let mut stream = provider.subscribe_logs(&filter).await?;
+        
+        while let Some(log) = stream.next().await {
+            match Self::parse_swap_event(&log, &pair).await {
+                Ok(event) => {
+                    debug!("检测到交易对 {} 的Swap事件", pair.id);
+                    if let Err(e) = event_sender.send(event).await {
+                        warn!("发送Swap事件失败: {}", e);
+                        break;
+                    }
+                }
+                Err(e) => {
+                    warn!("解析交易对 {} 的Swap事件失败: {}", pair.id, e);
+                }
+            }
+        }
+        
+        info!("交易对 {} 的Swap事件监听已停止", pair.id);
+        Ok(())
+    }
+
+    /// 解析Swap事件日志
+    async fn parse_swap_event(log: &Log, pair: &PairData) -> Result<EventType> {
+        if pair.protocol_type == protocol_types::AMM_V2 {
+            // 解析V2 Swap事件
+            if log.topics.len() >= 3 && log.data.len() >= 128 {
+                let sender_addr = H160::from(log.topics[1]);
+                let to = H160::from(log.topics[2]);
+                
+                let amount0_in = U256::from_big_endian(&log.data[0..32]);
+                let amount1_in = U256::from_big_endian(&log.data[32..64]);
+                let amount0_out = U256::from_big_endian(&log.data[64..96]);
+                let amount1_out = U256::from_big_endian(&log.data[96..128]);
+                
+                Ok(EventType::V2SwapEvent {
+                    pair_address: log.address,
+                    sender: sender_addr,
+                    amount0_in,
+                    amount1_in,
+                    amount0_out,
+                    amount1_out,
+                    to,
+                })
+            } else {
+                Err(anyhow!("V2 Swap事件数据格式不正确"))
+            }
+        } else if pair.protocol_type == protocol_types::AMM_V3 {
+            // 解析V3 Swap事件
+            if log.topics.len() >= 3 && log.data.len() >= 160 {
+                let sender_addr = H160::from(log.topics[1]);
+                let recipient = H160::from(log.topics[2]);
+                
+                let amount0 = I256::from_raw(U256::from_big_endian(&log.data[0..32]));
+                let amount1 = I256::from_raw(U256::from_big_endian(&log.data[32..64]));
+                let sqrt_price_x96 = U256::from_big_endian(&log.data[64..96]);
+                let liquidity = u128::from_be_bytes({
+                    let mut bytes = [0u8; 16];
+                    bytes.copy_from_slice(&log.data[96..112]);
+                    bytes
+                });
+                let tick = i32::from_be_bytes({
+                    let mut bytes = [0u8; 4];
+                    bytes.copy_from_slice(&log.data[156..160]);
+                    bytes
+                });
+                
+                Ok(EventType::V3SwapEvent {
+                    pair_address: log.address,
+                    sender: sender_addr,
+                    recipient,
+                    amount0,
+                    amount1,
+                    sqrt_price_x96,
+                    liquidity,
+                    tick,
+                })
+            } else {
+                Err(anyhow!("V3 Swap事件数据格式不正确"))
+            }
+        } else {
+            Err(anyhow!("不支持的协议类型: {}", pair.protocol_type))
+        }
     }
 
     /// 直接更新现有边的数据，避免删除重建

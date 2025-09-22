@@ -32,7 +32,8 @@ fn create_test_pair(id: &str, token0: &str, token1: &str, reserve0: &str, reserv
     }
 }
 
-fn main() {
+#[tokio::main]
+async fn main() {
     println!("🚀 测试新架构的性能改进");
     
     // 创建大量测试数据
@@ -63,7 +64,7 @@ fn main() {
     println!("\n🔧 测试图构建性能...");
     let start = Instant::now();
     let mut graph = ExchangeGraph::new();
-    graph.from_pair_data(&pairs).expect("构建图失败");
+    graph.from_pair_data(&pairs, None).await.expect("构建图失败");
     let build_time = start.elapsed();
     
     let (token_count, edge_count) = graph.get_stats();
