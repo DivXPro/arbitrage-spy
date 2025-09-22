@@ -1,4 +1,5 @@
 use std::collections::{HashMap, HashSet};
+use std::str::FromStr;
 use bigdecimal::{BigDecimal, FromPrimitive, ToPrimitive, Zero};
 use anyhow::{Result, anyhow};
 use serde::{Deserialize, Serialize};
@@ -145,7 +146,19 @@ impl ExchangeGraph {
                 warn!("跳过零价格的交易对: {}", pair.id);
                 continue;
             } else {
-                BigDecimal::from(1) / &price_1_per_0
+                let reverse_price = BigDecimal::from(1) / &price_1_per_0;
+                
+                // 验证反向价格是否合理
+                let min_price = BigDecimal::from_str("1e-18").unwrap();
+                let max_price = BigDecimal::from_str("1e18").unwrap();
+                
+                if reverse_price < min_price || reverse_price > max_price {
+                    warn!("跳过异常反向价格的交易对 {}: 原价格={}, 反向价格={}", 
+                          pair.id, price_1_per_0, reverse_price);
+                    continue;
+                }
+                
+                reverse_price
             };
             
             debug!("交易对 {} ({}) 价格计算: {} {} = 1 {}, 1 {} = {} {}", 
@@ -221,6 +234,39 @@ impl ExchangeGraph {
         }
         
         let price_0_per_1 = BigDecimal::from(1) / &price_1_per_0;
+        
+        // 验证反向价格是否合理
+        let min_price = BigDecimal::from_str("1e-18").unwrap();
+        let max_price = BigDecimal::from_str("1e18").unwrap();
+        
+        if price_0_per_1 < min_price || price_0_per_1 > max_price {
+            return Err(anyhow!("异常反向价格的交易对 {}: 原价格={}, 反向价格={}", 
+                              pair.id, price_1_per_0, price_0_per_1));
+        }
+   info!("更新交易对数据: {} ({} <-> {})", pair.id, pair.token0.symbol, pair.token1.symbol);
+        
+        // 验证交易对数据
+        self.validate_pair_data(pair)?;
+
+        // 使用PriceCalculator根据协议类型计算价格
+        let price_1_per_0 = PriceCalculator::calculate_price_from_pair(pair)
+            .map_err(|e| anyhow!("价格计算失败: {}", e))?;
+        
+        // 计算反向价格 (token0/token1)
+        if price_1_per_0.is_zero() {
+            return Err(anyhow!("价格为零，无法更新交易对: {}", pair.id));
+        }
+        
+        let price_0_per_1 = BigDecimal::from(1) / &price_1_per_0;
+        
+        // 验证反向价格是否合理
+        let min_price = BigDecimal::from_str("1e-18").unwrap();
+        let max_price = BigDecimal::from_str("1e18").unwrap();
+        
+        if price_0_per_1 < min_price || price_0_per_1 > max_price {
+            return Err(anyhow!("异常反向价格的交易对 {}: 原价格={}, 反向价格={}", 
+                              pair.id, price_1_per_0, price_0_per_1));
+        }
         
         debug!("交易对 {} ({}) 价格更新: {} {} = 1 {}, 1 {} = {} {}", 
                pair.id, 
