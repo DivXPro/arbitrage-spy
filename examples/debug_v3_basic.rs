@@ -1,7 +1,7 @@
 use anyhow::Result;
 use ethers::prelude::*;
 use std::sync::Arc;
-use arbitrage_spy::data::{BlockchainClient, NetworkConfig, UniswapV3Client};
+use arbitrage_spy::store::{BlockchainClient, NetworkConfig, UniswapV3Client};
 
 #[tokio::main]
 async fn main() -> Result<()> {

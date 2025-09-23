@@ -3,7 +3,7 @@ use bigdecimal::{BigDecimal, FromPrimitive, Zero, ToPrimitive};
 use anyhow::{Result, anyhow};
 use serde::{Deserialize, Serialize};
 use log::{info, warn};
-use crate::data::pair_manager::PairData;
+use crate::store::pair_manager::PairData;
 use crate::price_calculator::PriceCalculator;
 
 /// 交换边结构体，表示两个代币之间的交换关系

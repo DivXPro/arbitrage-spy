@@ -1,12 +1,12 @@
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use anyhow::Result;
 use log::{info, warn, debug};
 use crate::core::exchange_graph::ExchangeGraph;
-use crate::data::database::Database;
-use crate::data::pair_manager::{PairManager, PairData};
-use crate::data::blockchain_client::{BlockchainClient};
-use crate::data::uniswap_v3_client::UniswapV3Client;
+use crate::store::database::Database;
+use crate::store::pair_manager::{PairManager, PairData};
+use crate::store::blockchain_client::{BlockchainClient};
+use crate::store::uniswap_v3_client::UniswapV3Client;
 use crate::config::{dex_types};
 use crate::event_listener::EventListener;
 use ethers::prelude::*;
@@ -94,11 +94,14 @@ impl ArbitrageTrade {
     }
 
     /// 从数据库读取V3交易对并构建ExchangeGraph
-    pub async fn build_v3_exchange_graph(event_listener: EventListener, database: &Database) -> Result<ExchangeGraph> {
+    pub async fn build_v3_exchange_graph(database: &Database) -> Result<ExchangeGraph> {
         info!("开始从数据库读取V3交易对数据...");
 
+        // 创建EventListener实例
+        let event_listener = EventListener::new(None).await;
+        
         // 创建新的ExchangeGraph实例
-        let mut graph = ExchangeGraph::new(event_listener);
+        let mut graph = ExchangeGraph::new(Arc::new(Mutex::new(event_listener)));
         
         // 读取V3交易对数据
         let pair_manager = PairManager::new(database);

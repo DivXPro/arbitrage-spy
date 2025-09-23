@@ -6,7 +6,7 @@
 pub mod cli;
 pub mod config;
 pub mod core;
-pub mod data;
+pub mod store;
 pub mod dex;
 pub mod event_listener;
 pub mod log_adapter;
@@ -18,4 +18,4 @@ pub mod utils;
 // 重新导出常用类型
 pub use core::{ArbitrageChain, ArbitrageChainFinder, ArbitrageHop, ExchangeEdge, ExchangeGraph, ArbitrageOpportunity, Pool, Token as TypesToken, TokenPair};
 pub use config::Config;
-pub use data::{Database, PairManager, Token, TokenList, TokenManager};
+pub use store::{Database, PairManager, Token, TokenList, TokenManager};

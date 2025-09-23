@@ -1,4 +1,4 @@
-use arbitrage_spy::data::{
+use arbitrage_spy::store::{
     blockchain_client::BlockchainClient,
     uniswap_v2_client::UniswapV2Client,
 };

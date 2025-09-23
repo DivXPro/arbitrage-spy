@@ -1,4 +1,4 @@
-use arbitrage_spy::data::{BlockchainClient, UniswapV3Client};
+use arbitrage_spy::store::{BlockchainClient, UniswapV3Client};
 use ethers::prelude::*;
 use std::sync::Arc;
 

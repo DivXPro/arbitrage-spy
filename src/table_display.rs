@@ -19,7 +19,7 @@ use log::{info};
 use chrono;
 use serde_json;
 use crate::price_calculator::PriceCalculator;
-use crate::data::pair_manager::PairData;
+use crate::store::pair_manager::PairData;
 use crate::event_listener::RawEventData;
 
 #[derive(Clone, Debug)]

@@ -3,7 +3,7 @@ use anyhow::Result;
 mod cli;
 mod config;
 mod core;
-mod data;
+mod store;
 mod dex;
 mod event_listener;
 mod log_adapter;

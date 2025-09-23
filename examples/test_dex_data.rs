@@ -1,4 +1,4 @@
-use arbitrage_spy::data::{DexDataManager, DexType, NetworkConfig};
+use arbitrage_spy::store::{DexDataManager, DexType, NetworkConfig};
 use ethers::types::Address;
 use std::str::FromStr;
 use tokio;

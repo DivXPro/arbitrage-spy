@@ -1,7 +1,7 @@
 use anyhow::Result;
 use bigdecimal::{BigDecimal, FromPrimitive, Zero};
 use std::str::FromStr;
-use crate::data::pair_manager::PairData;
+use crate::store::pair_manager::PairData;
 
 use crate::config::protocol_types;
 
@@ -336,7 +336,7 @@ impl PriceCalculator {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::data::pair_manager::TokenInfo;
+    use crate::store::pair_manager::TokenInfo;
     use crate::config::dex_types;
     
     #[test]

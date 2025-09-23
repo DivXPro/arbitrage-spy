@@ -1,12 +1,12 @@
 use std::collections::{HashMap, HashSet};
 use std::str::FromStr;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use bigdecimal::{BigDecimal, FromPrimitive, ToPrimitive, Zero};
 use anyhow::{Result, anyhow};
 use log::{info, warn, debug};
 use chrono::{DateTime, Utc};
 use tokio::sync::mpsc;
-use crate::data::pair_manager::PairData;
+use crate::store::pair_manager::PairData;
 use crate::price_calculator::PriceCalculator;
 use crate::config::protocol_types;
 use crate::event_listener::{EventListener, RawEventData};
@@ -16,7 +16,7 @@ use super::arbitrage_path::ArbitragePath;
 /// 价格图，用于存储所有代币间的交换关系
 pub struct ExchangeGraph {
     /// 统一管理所有交易对数据
-    pub event_listener: EventListener,
+    pub event_listener: Arc<Mutex<EventListener>>,
     pub pairs: HashMap<String, Arc<PairData>>,              // pair_id -> PairData
     /// 邻接表：token -> [(to_token, edge)]
     pub adjacency_list: HashMap<String, Vec<ExchangeEdge>>, // 代币交换关系的邻接表
@@ -27,7 +27,7 @@ pub struct ExchangeGraph {
 }
 
 impl ExchangeGraph {
-    pub fn new(event_listener: EventListener) -> Self {
+    pub fn new(event_listener: Arc<Mutex<EventListener>>) -> Self {
         Self {
             event_listener,
             pairs: HashMap::new(),
@@ -158,7 +158,9 @@ impl ExchangeGraph {
                 // 存储 pair 数据
                 self.pairs.insert(pair.id.clone(), Arc::new(pair.clone()));
                 
-                self.event_listener.add_pair(pair.clone());
+                if let Ok(mut listener) = self.event_listener.lock() {
+                    let _ = listener.add_pair(pair.clone());
+                }
                 
                 (true, 2)
             }
