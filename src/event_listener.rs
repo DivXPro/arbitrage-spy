@@ -48,14 +48,14 @@ pub struct ContractInfo {
 }
 
 pub struct EventListener {
-    sender: mpsc::Sender<RawEventData>,
+    sender: Option<mpsc::Sender<RawEventData>>,
     provider: Option<Arc<Provider<ethers::providers::Ws>>>,
     contracts: HashMap<String, ContractInfo>,
 }
 
 impl EventListener {
     pub async fn new(
-        sender: mpsc::Sender<RawEventData>,
+        sender: Option<mpsc::Sender<RawEventData>>,
     ) -> Self {
         info!("正在创建EventListener实例...");
         
@@ -71,6 +71,10 @@ impl EventListener {
             provider,
             contracts,
         }
+    }
+
+    pub fn set_sender(&mut self, sender: mpsc::Sender<RawEventData>) {
+        self.sender = Some(sender);
     }
 
     /// 从PairData批量添加要监听的合约
@@ -211,36 +215,43 @@ impl EventListener {
         info!("分离合约: V2={} 个, V3={} 个", v2_contracts.len(), v3_contracts.len());
         
         // 启动事件监听循环
-        let sender = self.sender.clone();
-        
-        // 根据合约类型启动相应的监听器
-        if !v2_contracts.is_empty() && !v3_contracts.is_empty() {
-            // 同时监听V2和V3
-            tokio::select! {
-                _ = Self::listen_v2_swap_events(v2_contracts, provider.clone(), sender.clone()) => {
-                    error!("V2 Swap事件监听意外停止");
+        match &self.sender {
+            Some(sender) => {
+                // 根据合约类型启动相应的监听器
+                if !v2_contracts.is_empty() && !v3_contracts.is_empty() {
+                    // 同时监听V2和V3
+                    tokio::select! {
+                        _ = Self::listen_v2_swap_events(v2_contracts, provider.clone(), sender.clone()) => {
+                            error!("V2 Swap事件监听意外停止");
+                        }
+                        _ = Self::listen_v3_swap_events(v3_contracts, provider.clone(), sender.clone()) => {
+                            error!("V3 Swap事件监听意外停止");
+                        }
+                    }
+                } else if !v2_contracts.is_empty() {
+                    // 只监听V2
+                    if let Err(e) = Self::listen_v2_swap_events(v2_contracts, provider.clone(), sender.clone()).await {
+                        error!("V2 Swap事件监听失败: {}", e);
+                    }
+                } else if !v3_contracts.is_empty() {
+                    // 只监听V3
+                    if let Err(e) = Self::listen_v3_swap_events(v3_contracts, provider.clone(), sender.clone()).await {
+                        error!("V3 Swap事件监听失败: {}", e);
+                    }
+                } else {
+                    warn!("没有任何合约需要监听，事件监听器将保持运行但不监听任何事件");
+                    // 保持运行，等待可能的关闭信号
+                    loop {
+                        tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+                    }
                 }
-                _ = Self::listen_v3_swap_events(v3_contracts, provider.clone(), sender.clone()) => {
-                    error!("V3 Swap事件监听意外停止");
-                }
+                
             }
-        } else if !v2_contracts.is_empty() {
-            // 只监听V2
-            if let Err(e) = Self::listen_v2_swap_events(v2_contracts, provider.clone(), sender.clone()).await {
-                error!("V2 Swap事件监听失败: {}", e);
+            None => {
+                warn!("事件发送器未设置，无法启动事件监听");
+                return Ok(());
             }
-        } else if !v3_contracts.is_empty() {
-            // 只监听V3
-            if let Err(e) = Self::listen_v3_swap_events(v3_contracts, provider.clone(), sender.clone()).await {
-                error!("V3 Swap事件监听失败: {}", e);
-            }
-        } else {
-            warn!("没有任何合约需要监听，事件监听器将保持运行但不监听任何事件");
-            // 保持运行，等待可能的关闭信号
-            loop {
-                tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
-            }
-        }
+        };
         
         info!("事件监听器已停止");
         Ok(())

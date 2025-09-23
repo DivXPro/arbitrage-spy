@@ -84,7 +84,7 @@ impl RealTimeMonitor {
                 info!("正在创建事件监听模块");
                 
                 let mut event_listener = EventListener::new(
-                    raw_event_sender,
+                    Some(raw_event_sender),
                 ).await;
                 
                 // 添加要监听的交易对

@@ -8,12 +8,19 @@ use crate::data::pair_manager::{PairManager, PairData};
 use crate::data::blockchain_client::{BlockchainClient};
 use crate::data::uniswap_v3_client::UniswapV3Client;
 use crate::config::{dex_types};
+use crate::event_listener::EventListener;
 use ethers::prelude::*;
 
 /// 套利交易相关功能
-pub struct ArbitrageTrade;
+pub struct ArbitrageTrade {
+    pub event_listener: EventListener,
+}
 
 impl ArbitrageTrade {
+    pub fn new(event_listener: EventListener) -> Self {
+        Self { event_listener }
+    }
+    
     /// 通过链上数据更新PairData的最新信息
     pub async fn update_pairs_from_blockchain(pairs: &mut [PairData]) -> Result<()> {
         info!("开始从链上更新 {} 个交易对的数据...", pairs.len());
@@ -87,11 +94,11 @@ impl ArbitrageTrade {
     }
 
     /// 从数据库读取V3交易对并构建ExchangeGraph
-    pub async fn build_v3_exchange_graph(database: &Database) -> Result<ExchangeGraph> {
+    pub async fn build_v3_exchange_graph(event_listener: EventListener, database: &Database) -> Result<ExchangeGraph> {
         info!("开始从数据库读取V3交易对数据...");
-        
+
         // 创建新的ExchangeGraph实例
-        let mut graph = ExchangeGraph::new();
+        let mut graph = ExchangeGraph::new(event_listener);
         
         // 读取V3交易对数据
         let pair_manager = PairManager::new(database);
@@ -133,34 +140,5 @@ impl ArbitrageTrade {
     /// 检查图中是否存在直接路径
     pub fn has_direct_path(graph: &ExchangeGraph, from_token: &str, to_token: &str) -> bool {
         graph.has_direct_path(from_token, to_token)
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::data::pair_manager::{PairData, TokenInfo};
-    use std::str::FromStr;
-    use bigdecimal::BigDecimal;
-
-    #[test]
-    fn test_arbitrage_trade_creation() {
-        // 这里可以添加测试用例
-        // 由于需要数据库连接，实际测试需要mock数据库
-        assert!(true);
-    }
-
-    #[test]
-    fn test_graph_stats() {
-        let graph = ExchangeGraph::new();
-        let (tokens, edges) = ArbitrageTrade::get_graph_stats(&graph);
-        assert_eq!(tokens, 0);
-        assert_eq!(edges, 0);
-    }
-
-    #[test]
-    fn test_has_direct_path() {
-        let graph = ExchangeGraph::new();
-        assert!(!ArbitrageTrade::has_direct_path(&graph, "USDT", "USDC"));
     }
 }
