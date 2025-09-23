@@ -7,6 +7,7 @@ use crate::data::database::Database;
 use crate::event_listener::EventListener;
 use crate::log_adapter::LogAdapter;
 use crate::table_display::{DisplayMessage, TableDisplay, PairDisplay, PairDisplayConverter};
+use crate::event_listener::RawEventData;
 use crate::data::pair_manager::PairData;
 
 pub struct RealTimeMonitor {
@@ -70,21 +71,45 @@ impl RealTimeMonitor {
         count: usize,
     ) -> Result<()> {
         
+        // 创建原始事件数据通道
+        let (raw_event_sender, mut raw_event_receiver) = mpsc::channel::<RawEventData>(1000);
+        
         // 创建表格显示模块
         info!("正在创建表格显示模块");
         match TableDisplay::new(receiver, initial_data) {
             Ok(mut table_display) => {
                 info!("表格显示模块创建完成");
                 
-                // 创建事件监听模块，传递初始交易对数据
+                // 创建事件监听模块，传递原始事件数据sender
                 info!("正在创建事件监听模块");
+                
                 let mut event_listener = EventListener::new(
-                    self.database.clone(),
-                    sender,
-                    count,
-                    initial_pairs,
+                    raw_event_sender,
                 ).await;
+                
+                // 添加要监听的交易对
+                if let Err(e) = event_listener.add_pairs(initial_pairs) {
+                    error!("添加交易对监听失败: {}", e);
+                    return Err(e);
+                }
                 info!("事件监听模块创建完成");
+                
+                // 创建原始事件数据处理任务
+                let display_sender = sender.clone();
+                let event_processor_handle = tokio::spawn(async move {
+                    while let Some(raw_event) = raw_event_receiver.recv().await {
+                        // 在这里处理原始事件数据，转换为DisplayMessage
+                        info!("收到原始事件数据: {} from {}", raw_event.event_type, raw_event.contract_address);
+                        
+                        // 将原始事件数据包装为DisplayMessage发送给显示模块
+                        let display_message = DisplayMessage::RawEvent(raw_event);
+                        if let Err(e) = display_sender.send(display_message).await {
+                            error!("发送显示消息失败: {}", e);
+                            break;
+                        }
+                    }
+                    info!("原始事件数据处理任务已退出");
+                });
                 
                 // 启动两个模块
                 info!("正在启动表格显示模块");
@@ -101,7 +126,7 @@ impl RealTimeMonitor {
                     }
                 });
                 
-                info!("实时监控系统已启动，两个模块正在运行");
+                info!("实时监控系统已启动，三个模块正在运行");
                 
                 // 等待任一模块完成（通常是用户按Ctrl+C退出）
                 tokio::select! {
@@ -110,6 +135,9 @@ impl RealTimeMonitor {
                     }
                     _ = listener_handle => {
                         info!("事件监听模块已退出");
+                    }
+                    _ = event_processor_handle => {
+                        info!("事件处理模块已退出");
                     }
                 }
                 

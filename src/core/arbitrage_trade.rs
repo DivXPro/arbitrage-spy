@@ -113,7 +113,7 @@ impl ArbitrageTrade {
         Self::update_pairs_from_blockchain(&mut v3_pairs).await?;
         
         // 使用ExchangeGraph的from_pair_data方法构建图
-        graph.from_pair_data(&v3_pairs, None).await?;
+        graph.from_pair_data(&v3_pairs).await?;
         
         info!("V3交易对图构建完成，代币数量: {}, 边数量: {}", 
               graph.tokens.len(), 

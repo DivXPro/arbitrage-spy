@@ -7,16 +7,11 @@ use serde::{Deserialize, Serialize};
 use log::{info, warn, debug};
 use chrono::{DateTime, Utc};
 use tokio::sync::mpsc;
-use ethers::{
-    prelude::*,
-    providers::{Provider, StreamExt},
-    types::{Filter, Log, H160, U256, I256},
-};
-use crate::core::types::{TokenPair, Price};
 use crate::data::pair_manager::PairData;
 use crate::price_calculator::PriceCalculator;
 use crate::config::protocol_types;
-use crate::event_listener::{EventListener, EventType};
+use crate::event_listener::{RawEventData, ContractMetadata};
+use super::exchange_edge::ExchangeEdge;
 
 /// 套利路径结构体
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -157,38 +152,6 @@ impl ArbitragePath {
         )
     }
 
-    /// 获取详细的路径信息
-    pub fn get_detailed_info(&self) -> String {
-        let mut info = String::new();
-        info.push_str(&format!("=== 套利路径详情 ===\n"));
-        info.push_str(&format!("初始金额: {}\n", self.initial_amount));
-        info.push_str(&format!("最终金额: {}\n", self.final_amount));
-        info.push_str(&format!("绝对盈利: {}\n", self.profit));
-        info.push_str(&format!("盈利率: {:.4}%\n", self.profit_rate * 100.0));
-        info.push_str(&format!("总Gas成本: {}\n", self.total_gas_cost));
-        info.push_str(&format!("总手续费: {}\n", self.total_fee_cost));
-        info.push_str(&format!("净盈利: {}\n", self.net_profit));
-        info.push_str(&format!("净盈利率: {:.4}%\n", self.net_profit_rate * 100.0));
-        info.push_str(&format!("风险评分: {:.2}\n", self.risk_score));
-        info.push_str(&format!("预估执行时间: {:.1}秒\n", self.estimated_execution_time));
-        info.push_str(&format!("路径长度: {}步\n", self.edges.len()));
-        
-        info.push_str("\n=== 交易步骤 ===\n");
-        for (i, edge) in self.edges.iter().enumerate() {
-            info.push_str(&format!(
-                "步骤{}: {} -> {} (汇率: {}, DEX: {}, 流动性: {})\n",
-                i + 1,
-                edge.from_token,
-                edge.to_token,
-                edge.exchange_rate,
-                edge.dex,
-                edge.liquidity
-            ));
-        }
-
-        info
-    }
-
     /// 检查路径是否可执行（基于最小流动性要求）
     pub fn is_executable(&self, min_liquidity_per_step: f64) -> bool {
         for edge in &self.edges {
@@ -250,18 +213,7 @@ impl ArbitragePath {
 }
 
 /// 图中的边，表示一次代币交换
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ExchangeEdge {
-    pub pair_id: String,            // 交易对唯一标识（引用Graph中的PairData）
-    pub from_token: String,         // 源代币符号
-    pub to_token: String,           // 目标代币符号
-    pub dex: String,                // 去中心化交易所名称
-    pub exchange_rate: BigDecimal,  // 汇率 (to_token/from_token)
-    pub liquidity: BigDecimal,      // 流动性
-    pub gas_cost: BigDecimal,       // Gas成本估算
-    pub slippage: f64,              // 预期滑点
-    pub fee_percentage: f64,        // 交易费用百分比
-}
+
 
 
 
@@ -273,191 +225,11 @@ pub struct ExchangeGraph {
     pub adjacency_list: HashMap<String, Vec<ExchangeEdge>>, // 代币交换关系的邻接表
     pub tokens: HashSet<String>,                             // 所有代币符号的集合
     pub last_updated: DateTime<Utc>,         // 最后更新时间
+    /// EventListener的sender，用于发送交易对信息
+    pub event_sender: Option<mpsc::Sender<RawEventData>>,
 }
 
-impl ExchangeEdge {
-    /// 从PairData创建单向ExchangeEdge
-    /// 
-    /// # 参数
-    /// * `pair` - 交易对数据
-    /// * `from_token` - 源代币符号
-    /// * `to_token` - 目标代币符号
-    /// * `exchange_rate` - 汇率 (to_token/from_token)
-    /// 
-    /// # 返回
-    /// * `Result<ExchangeEdge>` - 创建的交换边或错误
-    pub fn from_pair_data(
-        pair: &PairData,
-        from_token: String,
-        to_token: String,
-        exchange_rate: BigDecimal,
-    ) -> Result<Self> {
-        // 验证输入参数
-        if from_token.is_empty() || to_token.is_empty() {
-            return Err(anyhow!("代币符号不能为空"));
-        }
-        
-        if from_token == to_token {
-            return Err(anyhow!("源代币和目标代币不能相同"));
-        }
-        
-        if exchange_rate <= BigDecimal::zero() {
-            return Err(anyhow!("汇率必须大于零"));
-        }
-        
-        // 计算流动性（使用reserve_usd作为流动性指标）
-        let liquidity = BigDecimal::from_str(&pair.reserve_usd)
-            .map_err(|_| anyhow!("无效的流动性数据: {}", pair.reserve_usd))?;
-        
-        // 估算Gas成本
-        let gas_cost = ExchangeGraph::estimate_gas_cost(&pair.dex);
-        
-        // 估算滑点
-        let slippage = ExchangeGraph::estimate_slippage(&liquidity);
-        
-        // 获取交易费用
-        let fee_percentage = ExchangeGraph::get_dex_fee_percentage(&pair.dex);
-        
-        Ok(ExchangeEdge {
-            pair_id: pair.id.clone(),
-            from_token,
-            to_token,
-            dex: pair.dex.clone(),
-            exchange_rate,
-            liquidity,
-            gas_cost,
-            slippage,
-            fee_percentage,
-        })
-    }
-    
-    /// 从PairData创建双向ExchangeEdge
-    /// 
-    /// # 参数
-    /// * `pair` - 交易对数据
-    /// 
-    /// # 返回
-    /// * `Result<(ExchangeEdge, ExchangeEdge)>` - 双向交换边或错误
-    pub fn create_bidirectional_edges(pair: &PairData) -> Result<(ExchangeEdge, ExchangeEdge)> {
-        // 使用PriceCalculator计算价格
-        let price_1_per_0 = PriceCalculator::calculate_price_from_pair(pair)
-            .map_err(|e| anyhow!("价格计算失败: {}", e))?;
-        
-        if price_1_per_0.is_zero() {
-            return Err(anyhow!("计算出的价格为零"));
-        }
-        
-        // 计算反向价格
-        let price_0_per_1 = BigDecimal::from(1) / &price_1_per_0;
-        
-        // 创建 token0 -> token1 的边
-        let edge_0_to_1 = Self::from_pair_data(
-            pair,
-            pair.token0.symbol.clone(),
-            pair.token1.symbol.clone(),
-            price_1_per_0,
-        )?;
-        
-        // 创建 token1 -> token0 的边
-        let edge_1_to_0 = Self::from_pair_data(
-            pair,
-            pair.token1.symbol.clone(),
-            pair.token0.symbol.clone(),
-            price_0_per_1,
-        )?;
-        
-        Ok((edge_0_to_1, edge_1_to_0))
-    }
-    
-    /// 从PairData批量创建ExchangeEdge
-    /// 
-    /// # 参数
-    /// * `pairs` - 交易对数据列表
-    /// 
-    /// # 返回
-    /// * `Result<Vec<ExchangeEdge>>` - 所有创建的交换边或错误
-    pub fn from_pair_data_batch(pairs: &[PairData]) -> Result<Vec<ExchangeEdge>> {
-        let mut edges = Vec::new();
-        let mut error_count = 0;
-        
-        for pair in pairs {
-            match Self::create_bidirectional_edges(pair) {
-                Ok((edge1, edge2)) => {
-                    edges.push(edge1);
-                    edges.push(edge2);
-                }
-                Err(e) => {
-                    warn!("跳过交易对 {}: {}", pair.id, e);
-                    error_count += 1;
-                }
-            }
-        }
-        
-        info!("批量创建ExchangeEdge完成，成功: {}, 失败: {}", 
-              edges.len() / 2, error_count);
-        
-        Ok(edges)
-    }
-    
-    /// 验证ExchangeEdge的有效性
-    pub fn validate(&self) -> Result<()> {
-        if self.pair_id.is_empty() {
-            return Err(anyhow!("交易对ID不能为空"));
-        }
-        
-        if self.from_token.is_empty() || self.to_token.is_empty() {
-            return Err(anyhow!("代币符号不能为空"));
-        }
-        
-        if self.from_token == self.to_token {
-            return Err(anyhow!("源代币和目标代币不能相同"));
-        }
-        
-        if self.exchange_rate <= BigDecimal::zero() {
-            return Err(anyhow!("汇率必须大于零"));
-        }
-        
-        if self.liquidity < BigDecimal::zero() {
-            return Err(anyhow!("流动性不能为负数"));
-        }
-        
-        if self.gas_cost < BigDecimal::zero() {
-            return Err(anyhow!("Gas成本不能为负数"));
-        }
-        
-        if self.slippage < 0.0 || self.slippage > 1.0 {
-            return Err(anyhow!("滑点必须在0-1之间"));
-        }
-        
-        if self.fee_percentage < 0.0 || self.fee_percentage > 1.0 {
-            return Err(anyhow!("交易费用百分比必须在0-1之间"));
-        }
-        
-        Ok(())
-    }
-    
-    /// 计算考虑费用和滑点后的实际汇率
-    pub fn effective_exchange_rate(&self) -> BigDecimal {
-        let fee_multiplier = BigDecimal::from_f64(1.0 - self.fee_percentage)
-            .unwrap_or_else(|| BigDecimal::from(1));
-        let slippage_multiplier = BigDecimal::from_f64(1.0 - self.slippage)
-            .unwrap_or_else(|| BigDecimal::from(1));
-        
-        &self.exchange_rate * &fee_multiplier * &slippage_multiplier
-    }
-    
-    /// 获取交换边的显示信息
-    pub fn display_info(&self) -> String {
-        format!(
-            "{} -> {} (DEX: {}, Rate: {:.6}, Liquidity: ${:.0})",
-            self.from_token,
-            self.to_token,
-            self.dex,
-            self.exchange_rate,
-            self.liquidity
-        )
-    }
-}
+
 
 impl ExchangeGraph {
     pub fn new() -> Self {
@@ -466,6 +238,18 @@ impl ExchangeGraph {
             adjacency_list: HashMap::new(),
             tokens: HashSet::new(),
             last_updated: Utc::now(),
+            event_sender: None,
+        }
+    }
+
+    /// 创建带有EventListener sender的ExchangeGraph
+    pub fn with_event_sender(event_sender: mpsc::Sender<RawEventData>) -> Self {
+        Self {
+            pairs: HashMap::new(),
+            adjacency_list: HashMap::new(),
+            tokens: HashSet::new(),
+            last_updated: Utc::now(),
+            event_sender: Some(event_sender),
         }
     }
 
@@ -548,11 +332,97 @@ impl ExchangeGraph {
         self.pairs.get(pair_id).cloned()
     }
 
-    /// 从PairData数据构建图，可选择启动Swap事件监听
+    /// 从PairData数据构建图
+    /// 添加单个交易对数据到图中
+    /// 返回 (是否成功添加, 添加的边数量)
+    fn add_pair(&mut self, pair: &PairData) -> (bool, usize) {
+        // 验证交易对数据
+        if let Err(e) = self.validate_pair_data(pair) {
+            warn!("跳过无效交易对数据 {}: {}", pair.id, e);
+            return (false, 0);
+        }
+
+        // 使用ExchangeEdge的create_bidirectional_edges方法创建双向边
+        match ExchangeEdge::create_bidirectional_edges(pair) {
+            Ok((forward_edge, reverse_edge)) => {
+                debug!("交易对 {} ({}) 成功创建双向边: {} -> {} (汇率: {}), {} -> {} (汇率: {})", 
+                       pair.id, 
+                       pair.protocol_type,
+                       forward_edge.from_token,
+                       forward_edge.to_token,
+                       forward_edge.exchange_rate,
+                       reverse_edge.from_token,
+                       reverse_edge.to_token,
+                       reverse_edge.exchange_rate);
+
+                // 验证边的有效性
+                if let Err(e) = forward_edge.validate() {
+                    warn!("跳过无效的正向边 {}: {}", pair.id, e);
+                    return (false, 0);
+                }
+                
+                if let Err(e) = reverse_edge.validate() {
+                    warn!("跳过无效的反向边 {}: {}", pair.id, e);
+                    return (false, 0);
+                }
+
+                // 添加边到图中
+                self.add_edge(forward_edge);
+                self.add_edge(reverse_edge);
+                
+                // 存储 pair 数据
+                self.pairs.insert(pair.id.clone(), Arc::new(pair.clone()));
+                
+                // 向EventListener发送交易对信息
+                if let Some(ref sender) = self.event_sender {
+                    let contract_metadata = ContractMetadata {
+                        protocol_type: pair.protocol_type.clone(),
+                        dex: pair.dex.clone(),
+                        name: format!("{}-{}", pair.token0.symbol, pair.token1.symbol),
+                    };
+                    
+                    let pair_data = serde_json::json!({
+                        "pair_id": pair.id,
+                        "token0_id": pair.token0.id,
+                        "token1_id": pair.token1.id,
+                        "token0_symbol": pair.token0.symbol,
+                        "token1_symbol": pair.token1.symbol,
+                        "dex": pair.dex,
+                        "protocol_type": pair.protocol_type,
+                        "reserve0": pair.reserve0.to_string(),
+                        "reserve1": pair.reserve1.to_string(),
+                    });
+                    
+                    let raw_event = RawEventData {
+                        event_type: "PairAdded".to_string(),
+                        contract_address: pair.id.clone(),
+                        contract_info: Some(contract_metadata),
+                        raw_data: pair_data,
+                        timestamp: std::time::SystemTime::now()
+                            .duration_since(std::time::UNIX_EPOCH)
+                            .unwrap_or_default()
+                            .as_secs(),
+                    };
+                    
+                    if let Err(e) = sender.try_send(raw_event) {
+                        warn!("发送交易对信息到EventListener失败 {}: {}", pair.id, e);
+                    } else {
+                        debug!("成功发送交易对信息到EventListener: {}", pair.id);
+                    }
+                }
+                
+                (true, 2)
+            }
+            Err(e) => {
+                warn!("跳过创建边失败的交易对 {} => {} : {}", pair.token0.symbol, pair.token1.symbol, e);
+                (false, 0)
+            }
+        }
+    }
+
     pub async fn from_pair_data(
         &mut self, 
         pair_data: &[PairData],
-        event_sender: Option<mpsc::Sender<EventType>>
     ) -> Result<()> {
         info!("开始从PairData构建价格图，交易对数量: {}", pair_data.len());
         
@@ -565,54 +435,11 @@ impl ExchangeGraph {
         let mut skipped_count = 0;
         
         for pair in pair_data {
-            // 验证交易对数据
-            if let Err(e) = self.validate_pair_data(pair) {
-                warn!("跳过无效交易对数据 {}: {}", pair.id, e);
+            let (success, added_edges) = self.add_pair(pair);
+            if success {
+                edge_count += added_edges;
+            } else {
                 skipped_count += 1;
-                continue;
-            }
-
-            // 使用ExchangeEdge的create_bidirectional_edges方法创建双向边
-            match ExchangeEdge::create_bidirectional_edges(pair) {
-                Ok((forward_edge, reverse_edge)) => {
-                    debug!("交易对 {} ({}) 成功创建双向边: {} -> {} (汇率: {}), {} -> {} (汇率: {})", 
-                           pair.id, 
-                           pair.protocol_type,
-                           forward_edge.from_token,
-                           forward_edge.to_token,
-                           forward_edge.exchange_rate,
-                           reverse_edge.from_token,
-                           reverse_edge.to_token,
-                           reverse_edge.exchange_rate);
-
-                    // 验证边的有效性
-                    if let Err(e) = forward_edge.validate() {
-                        warn!("跳过无效的正向边 {}: {}", pair.id, e);
-                        skipped_count += 1;
-                        continue;
-                    }
-                    
-                    if let Err(e) = reverse_edge.validate() {
-                        warn!("跳过无效的反向边 {}: {}", pair.id, e);
-                        skipped_count += 1;
-                        continue;
-                    }
-
-                    // 添加边到图中
-                    self.add_edge(forward_edge);
-                    self.add_edge(reverse_edge);
-                    edge_count += 2;
-                    
-                    // 使用新的process_and_store_pair方法处理pair存储和事件监听
-                    if let Err(e) = self.process_and_store_pair(pair, event_sender.clone()).await {
-                        warn!("处理交易对 {} 失败: {}", pair.id, e);
-                    }
-                }
-                Err(e) => {
-                    warn!("跳过创建边失败的交易对 {} => {} : {}", pair.token0.symbol, pair.token1.symbol, e);
-                    skipped_count += 1;
-                    continue;
-                }
             }
         }
 
@@ -748,165 +575,6 @@ impl ExchangeGraph {
         info!("交易对 {} 更新完成", pair.id);
         
         Ok(())
-    }
-
-    /// 处理并存储交易对数据，同时启动Swap事件监听
-    /// 这个方法将pair存储到graph中，并为该pair启动链上Swap事件监听
-    pub async fn process_and_store_pair(
-        &mut self, 
-        pair: &PairData,
-        event_sender: Option<mpsc::Sender<EventType>>
-    ) -> Result<()> {
-        info!("处理并存储交易对: {} ({} <-> {})", pair.id, pair.token0.symbol, pair.token1.symbol);
-        
-        // 存储PairData到pairs字段中
-        self.pairs.insert(pair.id.clone(), Arc::new(pair.clone()));
-        
-        // 如果提供了事件发送器，启动该pair的Swap事件监听
-        if let Some(sender) = event_sender {
-            if let Ok(pair_address) = pair.id.parse::<H160>() {
-                info!("为交易对 {} 启动Swap事件监听", pair.id);
-                
-                // 启动异步任务监听该pair的Swap事件
-                let pair_clone = pair.clone();
-                let pair_id = pair.id.clone();
-                let sender_clone = sender.clone();
-                
-                tokio::spawn(async move {
-                    if let Err(e) = Self::start_pair_swap_listener(pair_clone, pair_address, sender_clone).await {
-                        warn!("交易对 {} 的Swap事件监听启动失败: {}", pair_id, e);
-                    }
-                });
-            } else {
-                warn!("无效的交易对地址，无法启动事件监听: {}", pair.id);
-            }
-        }
-        
-        debug!("交易对 {} 处理完成，已存储到graph中", pair.id);
-        Ok(())
-    }
-
-    /// 为单个交易对启动Swap事件监听
-    async fn start_pair_swap_listener(
-        pair: PairData,
-        pair_address: H160,
-        event_sender: mpsc::Sender<EventType>
-    ) -> Result<()> {
-        // 尝试连接到以太坊节点
-        let ws_url = std::env::var("ETHEREUM_WS_URL")
-            .unwrap_or_else(|_| "wss://mainnet.infura.io/ws/v3/YOUR_PROJECT_ID".to_string());
-        
-        let provider = match Provider::<ethers::providers::Ws>::connect(&ws_url).await {
-            Ok(provider) => Arc::new(provider),
-            Err(e) => {
-                warn!("无法连接到以太坊节点: {}", e);
-                return Ok(());
-            }
-        };
-
-        // 根据协议类型创建相应的事件过滤器
-        let filter = if pair.protocol_type == protocol_types::AMM_V2 {
-            // V2 Swap事件签名: Swap(address,uint256,uint256,uint256,uint256,address)
-            Filter::new()
-                .event("Swap(address,uint256,uint256,uint256,uint256,address)")
-                .address(pair_address)
-                .from_block(BlockNumber::Latest)
-        } else if pair.protocol_type == protocol_types::AMM_V3 {
-            // V3 Swap事件签名: Swap(address,address,int256,int256,uint160,uint128,int24)
-            Filter::new()
-                .event("Swap(address,address,int256,int256,uint160,uint128,int24)")
-                .address(pair_address)
-                .from_block(BlockNumber::Latest)
-        } else {
-            warn!("不支持的协议类型: {}", pair.protocol_type);
-            return Ok(());
-        };
-
-        info!("开始监听交易对 {} 的Swap事件 (协议: {})", pair.id, pair.protocol_type);
-        
-        // 订阅事件流
-        let mut stream = provider.subscribe_logs(&filter).await?;
-        
-        while let Some(log) = stream.next().await {
-            match Self::parse_swap_event(&log, &pair).await {
-                Ok(event) => {
-                    debug!("检测到交易对 {} 的Swap事件", pair.id);
-                    if let Err(e) = event_sender.send(event).await {
-                        warn!("发送Swap事件失败: {}", e);
-                        break;
-                    }
-                }
-                Err(e) => {
-                    warn!("解析交易对 {} 的Swap事件失败: {}", pair.id, e);
-                }
-            }
-        }
-        
-        info!("交易对 {} 的Swap事件监听已停止", pair.id);
-        Ok(())
-    }
-
-    /// 解析Swap事件日志
-    async fn parse_swap_event(log: &Log, pair: &PairData) -> Result<EventType> {
-        if pair.protocol_type == protocol_types::AMM_V2 {
-            // 解析V2 Swap事件
-            if log.topics.len() >= 3 && log.data.len() >= 128 {
-                let sender_addr = H160::from(log.topics[1]);
-                let to = H160::from(log.topics[2]);
-                
-                let amount0_in = U256::from_big_endian(&log.data[0..32]);
-                let amount1_in = U256::from_big_endian(&log.data[32..64]);
-                let amount0_out = U256::from_big_endian(&log.data[64..96]);
-                let amount1_out = U256::from_big_endian(&log.data[96..128]);
-                
-                Ok(EventType::V2SwapEvent {
-                    pair_address: log.address,
-                    sender: sender_addr,
-                    amount0_in,
-                    amount1_in,
-                    amount0_out,
-                    amount1_out,
-                    to,
-                })
-            } else {
-                Err(anyhow!("V2 Swap事件数据格式不正确"))
-            }
-        } else if pair.protocol_type == protocol_types::AMM_V3 {
-            // 解析V3 Swap事件
-            if log.topics.len() >= 3 && log.data.len() >= 160 {
-                let sender_addr = H160::from(log.topics[1]);
-                let recipient = H160::from(log.topics[2]);
-                
-                let amount0 = I256::from_raw(U256::from_big_endian(&log.data[0..32]));
-                let amount1 = I256::from_raw(U256::from_big_endian(&log.data[32..64]));
-                let sqrt_price_x96 = U256::from_big_endian(&log.data[64..96]);
-                let liquidity = u128::from_be_bytes({
-                    let mut bytes = [0u8; 16];
-                    bytes.copy_from_slice(&log.data[96..112]);
-                    bytes
-                });
-                let tick = i32::from_be_bytes({
-                    let mut bytes = [0u8; 4];
-                    bytes.copy_from_slice(&log.data[156..160]);
-                    bytes
-                });
-                
-                Ok(EventType::V3SwapEvent {
-                    pair_address: log.address,
-                    sender: sender_addr,
-                    recipient,
-                    amount0,
-                    amount1,
-                    sqrt_price_x96,
-                    liquidity,
-                    tick,
-                })
-            } else {
-                Err(anyhow!("V3 Swap事件数据格式不正确"))
-            }
-        } else {
-            Err(anyhow!("不支持的协议类型: {}", pair.protocol_type))
-        }
     }
 
     /// 直接更新现有边的数据，避免删除重建

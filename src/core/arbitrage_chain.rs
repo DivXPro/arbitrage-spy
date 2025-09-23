@@ -4,7 +4,8 @@ use anyhow::{Result, anyhow};
 use serde::{Deserialize, Serialize};
 use log::{info, warn, debug};
 use crate::core::types::{Price, TokenPair};
-use crate::core::exchange_graph::{ExchangeEdge, ExchangeGraph};
+use crate::core::exchange_edge::ExchangeEdge;
+use crate::core::exchange_graph::ExchangeGraph;
 
 #[cfg(test)]
 use std::str::FromStr;

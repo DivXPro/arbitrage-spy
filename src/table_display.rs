@@ -17,8 +17,10 @@ use std::time::Duration;
 use tokio::sync::mpsc;
 use log::{info};
 use chrono;
+use serde_json;
 use crate::price_calculator::PriceCalculator;
 use crate::data::pair_manager::PairData;
+use crate::event_listener::RawEventData;
 
 #[derive(Clone, Debug)]
 pub struct PairDisplay {
@@ -38,9 +40,13 @@ pub enum DisplayMessage {
     PartialUpdate { index: usize, data: PairDisplay },
     /// 批量局部更新 - 更新多个指定索引的数据
     BatchPartialUpdate(Vec<(usize, PairDisplay)>),
+    /// 原始事件数据 - 由业务模块处理
+    RawEvent(RawEventData),
     /// 关闭显示
     Shutdown,
 }
+
+
 
 /// PairData转换工具
 pub struct PairDisplayConverter;
@@ -198,6 +204,11 @@ impl TableDisplay {
                                      Self::render_ui_static(f, &visible_pairs, self.scroll_offset, current_pairs.len(), self.visible_rows);
                                  }
                             });
+                        }
+                        Some(DisplayMessage::RawEvent(_raw_event)) => {
+                            // 原始事件数据暂时忽略，由业务模块处理
+                            // 这里可以记录日志或转发给其他处理器
+                            info!("收到原始事件数据，由业务模块处理");
                         }
                         Some(DisplayMessage::Shutdown) => {
                             break;

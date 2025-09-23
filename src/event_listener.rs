@@ -10,47 +10,34 @@ use std::sync::Arc;
 use std::collections::HashMap;
 use std::env;
 
-use crate::data::database::Database;
-use crate::price_calculator::PriceCalculator;
-use crate::table_display::{DisplayMessage, PairDisplay, PairDisplayConverter};
-use crate::data::pair_manager::PairData;
-use crate::config::{protocol_types, dex_types};
-use chrono;
 
+use crate::data::pair_manager::PairData;
+use crate::config::{protocol_types};
+use serde_json;
+
+// EventType 枚举已移除，现在直接使用 JSON 格式的原始事件数据
+
+/// 原始事件数据，由 EventListener 发送，业务模块处理
 #[derive(Debug, Clone)]
-pub enum EventType {
-    V2SwapEvent {
-        pair_address: H160,
-        sender: H160,
-        amount0_in: U256,
-        amount1_in: U256,
-        amount0_out: U256,
-        amount1_out: U256,
-        to: H160,
-    },
-    V3SwapEvent {
-        pair_address: H160,
-        sender: H160,
-        recipient: H160,
-        amount0: I256,
-        amount1: I256,
-        sqrt_price_x96: U256,
-        liquidity: u128,
-        tick: i32,
-    },
-    MintEvent {
-        pair_address: H160,
-        liquidity_added: U256,
-    },
-    BurnEvent {
-        pair_address: H160,
-        liquidity_removed: U256,
-    },
-    PairCreated {
-        pair_address: H160,
-        token0: H160,
-        token1: H160,
-    },
+pub struct RawEventData {
+    /// 事件类型
+    pub event_type: String,
+    /// 合约地址
+    pub contract_address: String,
+    /// 合约信息（协议类型、DEX等）
+    pub contract_info: Option<ContractMetadata>,
+    /// 原始事件数据
+    pub raw_data: serde_json::Value,
+    /// 事件时间戳
+    pub timestamp: u64,
+}
+
+/// 合约元数据
+#[derive(Debug, Clone)]
+pub struct ContractMetadata {
+    pub protocol_type: String,
+    pub dex: String,
+    pub name: String,
 }
 
 #[derive(Debug, Clone)]
@@ -61,57 +48,54 @@ pub struct ContractInfo {
 }
 
 pub struct EventListener {
-    database: Database,
-    sender: mpsc::Sender<DisplayMessage>,
-    count: usize,
+    sender: mpsc::Sender<RawEventData>,
     provider: Option<Arc<Provider<ethers::providers::Ws>>>,
     contracts: HashMap<String, ContractInfo>,
-    pairs: Vec<PairData>,
 }
 
 impl EventListener {
     pub async fn new(
-        database: Database,
-        sender: mpsc::Sender<DisplayMessage>,
-        count: usize,
-        initial_pairs: Vec<PairData>,
+        sender: mpsc::Sender<RawEventData>,
     ) -> Self {
-        // 尝试连接到以太坊节点
+        info!("正在创建EventListener实例...");
+        
+        // 尝试连接到以太坊WebSocket
         let provider = Self::try_connect_to_ethereum().await;
         
-        // 从初始交易对数据中提取合约地址和协议信息
-        let mut contracts: HashMap<String, ContractInfo> = HashMap::new();
-        info!("开始从 {} 个初始交易对中提取合约地址", initial_pairs.len());
-        for pair in &initial_pairs {
-            let pair_name = format!("{}-{}", pair.token0.symbol, pair.token1.symbol);
-            if let Ok(address) = pair.id.parse::<H160>() {
-                let contract_info = ContractInfo {
-                    address,
-                    protocol_type: pair.protocol_type.clone(),
-                    dex: pair.dex.clone(),
-                };
-                info!("已添加交易对合约监听: {} -> {} ({})", 
-                      pair_name, pair.id, pair.protocol_type);
-                contracts.insert(pair_name, contract_info);
-            } else {
-                warn!("无效的交易对地址: {}", pair.id);
-            }
-        }
-        info!("合约地址提取完成，共添加 {} 个合约", contracts.len());
-        
+        // 初始化空的合约映射，稍后通过方法添加
+        let contracts = HashMap::new();
+        info!("EventListener实例创建完成，等待添加合约监听");
 
-        let event_listener = Self {
-            database: database.clone(),
+        Self {
             sender,
-            count,
             provider,
             contracts,
-            pairs: initial_pairs,
-        };
-        
-        event_listener
+        }
     }
 
+    /// 从PairData批量添加要监听的合约
+    pub fn add_pair(&mut self, pair: PairData) -> Result<()> {
+        let pair_name = format!("{}-{}", pair.token0.symbol, pair.token1.symbol);
+        if let Ok(address) = pair.id.parse::<H160>() {
+            let contract_info = ContractInfo {
+                address,
+                protocol_type: pair.protocol_type.clone(),
+                dex: pair.dex.clone(),
+            };
+            info!("已添加交易对合约监听: {} -> {} ({})", pair_name, pair.id, pair.protocol_type);
+            self.contracts.insert(pair_name, contract_info);
+        } else {
+            warn!("无效的交易对地址: {}", pair.id);
+        }
+        Ok(())
+    }
+
+    pub fn add_pairs(&mut self, pairs: Vec<PairData>) -> Result<()> {
+        for pair in pairs {
+            self.add_pair(pair)?;
+        }
+        Ok(())
+    }
     
     /// 添加要监听的DEX合约地址
     pub fn add_contract(&mut self, name: String, address: &str, protocol_type: String, dex_type: String) -> Result<()> {
@@ -129,35 +113,12 @@ impl EventListener {
         Ok(())
     }
     
-    /// 移除DEX合约地址
-    pub fn remove_contract(&mut self, name: &str) -> bool {
-        if let Some(contract_info) = self.contracts.remove(name) {
-            info!("已移除合约监听: {} -> {:?} ({})", name, contract_info.address, contract_info.protocol_type);
-            true
-        } else {
-            warn!("未找到要移除的合约: {}", name);
-            false
-        }
-    }
-    
     /// 批量添加合约地址（需要指定协议类型）
     pub fn add_contracts(&mut self, contracts: HashMap<String, (String, String, String)>) -> Result<()> {
         for (name, (address, protocol_type, dex_type)) in contracts {
             self.add_contract(name, &address, protocol_type, dex_type)?;
         }
         Ok(())
-    }
-    
-    /// 获取所有合约信息
-    pub fn get_contracts(&self) -> &HashMap<String, ContractInfo> {
-        &self.contracts
-    }
-    
-    /// 清空所有合约地址
-    pub fn clear_contracts(&mut self) {
-        let count = self.contracts.len();
-        self.contracts.clear();
-        info!("已清空所有合约地址，共移除 {} 个合约", count);
     }
 
     async fn try_connect_to_ethereum() -> Option<Arc<Provider<ethers::providers::Ws>>> {
@@ -251,27 +212,26 @@ impl EventListener {
         
         // 启动事件监听循环
         let sender = self.sender.clone();
-        let pairs = self.pairs.clone();
         
         // 根据合约类型启动相应的监听器
         if !v2_contracts.is_empty() && !v3_contracts.is_empty() {
             // 同时监听V2和V3
             tokio::select! {
-                _ = Self::listen_v2_swap_events(v2_contracts, provider.clone(), sender.clone(), pairs.clone()) => {
+                _ = Self::listen_v2_swap_events(v2_contracts, provider.clone(), sender.clone()) => {
                     error!("V2 Swap事件监听意外停止");
                 }
-                _ = Self::listen_v3_swap_events(v3_contracts, provider.clone(), sender.clone(), pairs.clone()) => {
+                _ = Self::listen_v3_swap_events(v3_contracts, provider.clone(), sender.clone()) => {
                     error!("V3 Swap事件监听意外停止");
                 }
             }
         } else if !v2_contracts.is_empty() {
             // 只监听V2
-            if let Err(e) = Self::listen_v2_swap_events(v2_contracts, provider.clone(), sender.clone(), pairs.clone()).await {
+            if let Err(e) = Self::listen_v2_swap_events(v2_contracts, provider.clone(), sender.clone()).await {
                 error!("V2 Swap事件监听失败: {}", e);
             }
         } else if !v3_contracts.is_empty() {
             // 只监听V3
-            if let Err(e) = Self::listen_v3_swap_events(v3_contracts, provider.clone(), sender.clone(), pairs.clone()).await {
+            if let Err(e) = Self::listen_v3_swap_events(v3_contracts, provider.clone(), sender.clone()).await {
                 error!("V3 Swap事件监听失败: {}", e);
             }
         } else {
@@ -290,8 +250,7 @@ impl EventListener {
     async fn listen_v2_swap_events(
         contracts: HashMap<String, ContractInfo>,
         provider: Arc<Provider<ethers::providers::Ws>>,
-        sender: mpsc::Sender<DisplayMessage>,
-        pairs: Vec<PairData>,
+        sender: mpsc::Sender<RawEventData>,
     ) -> Result<()> {
         if contracts.is_empty() {
             info!("没有V2合约需要监听");
@@ -314,7 +273,7 @@ impl EventListener {
         let mut stream = provider.subscribe_logs(&v2_filter).await?;
         
         while let Some(log) = stream.next().await {
-            if let Err(e) = Self::process_v2_swap_event(&log, &contracts, &sender, &pairs).await {
+            if let Err(e) = Self::process_v2_swap_event(&log, &contracts, &sender).await {
                 error!("处理V2 Swap事件失败: {}", e);
             }
         }
@@ -326,8 +285,7 @@ impl EventListener {
     async fn listen_v3_swap_events(
         contracts: HashMap<String, ContractInfo>,
         provider: Arc<Provider<ethers::providers::Ws>>,
-        sender: mpsc::Sender<DisplayMessage>,
-        pairs: Vec<PairData>,
+        sender: mpsc::Sender<RawEventData>,
     ) -> Result<()> {
         if contracts.is_empty() {
             info!("没有V3合约需要监听");
@@ -350,7 +308,7 @@ impl EventListener {
         let mut stream = provider.subscribe_logs(&v3_filter).await?;
         
         while let Some(log) = stream.next().await {
-            if let Err(e) = Self::process_v3_swap_event(&log, &contracts, &sender, &pairs).await {
+            if let Err(e) = Self::process_v3_swap_event(&log, &contracts, &sender).await {
                 error!("处理V3 Swap事件失败: {}", e);
             }
         }
@@ -358,48 +316,12 @@ impl EventListener {
         Ok(())
     }
 
-    async fn listen_swap_events_static(
-        contracts: HashMap<String, H160>,
-        provider: Arc<Provider<ethers::providers::Ws>>, 
-        filter: Filter,
-        sender: mpsc::Sender<DisplayMessage>,
-        pairs: Vec<PairData>
-    ) -> Result<()> {
-        info!("开始监听Swap事件...");
-        
-        // 使用WebSocket实时事件流
-        let mut stream = provider.subscribe_logs(&filter).await?;
-        
-        info!("WebSocket事件流已建立，等待Swap事件...");
-        
-        while let Some(log) = stream.next().await {
-            let contract_name = contracts.iter().find(|(_, addr)| **addr == log.address)
-                .map(|(name, _)| name.clone())
-                .unwrap_or_else(|| format!("{:?}", log.address));
-            info!("检测到实时Swap事件，合约: {}", contract_name);
-             
-             // 处理事件并获取局部更新数据
-             match Self::process_swap_event(&log, &sender, &contracts, pairs.clone()).await {
-                 Ok(_) => {
-                     info!("成功处理Swap事件并发送局部更新");
-                     debug!("实时Swap事件触发的数据更新已推送");
-                 }
-                 Err(e) => {
-                     error!("处理Swap事件失败: {}", e);
-                     continue;
-                 }
-             }
-         }
-        
-        warn!("WebSocket事件流已结束");
-        Ok(())
-    }
+
     
     async fn process_v2_swap_event(
         log: &Log,
         contracts: &HashMap<String, ContractInfo>,
-        msg_sender: &mpsc::Sender<DisplayMessage>,
-        pairs: &Vec<PairData>,
+        msg_sender: &mpsc::Sender<RawEventData>,
     ) -> Result<()> {
         let contract_name = contracts.iter()
             .find(|(_, contract_info)| contract_info.address == log.address)
@@ -423,19 +345,25 @@ impl EventListener {
             info!("V2 Swap: sender={:?}, to={:?}, amount0In={}, amount1In={}, amount0Out={}, amount1Out={}", 
                   sender_addr, to, amount0_in, amount1_in, amount0_out, amount1_out);
             
-            // 创建V2SwapEvent
-            let swap_event = EventType::V2SwapEvent {
-                pair_address: log.address,
-                sender: sender_addr,
-                amount0_in,
-                amount1_in,
-                amount0_out,
-                amount1_out,
-                to,
-            };
+            // 创建原始事件数据
+            let event_data = serde_json::json!({
+                "event_type": "V2SwapEvent",
+                "pair_address": format!("{:?}", log.address),
+                "sender": format!("{:?}", sender_addr),
+                "amount0_in": amount0_in.to_string(),
+                "amount1_in": amount1_in.to_string(),
+                "amount0_out": amount0_out.to_string(),
+                "amount1_out": amount1_out.to_string(),
+                "to": format!("{:?}", to),
+                "block_number": log.block_number.map(|n| n.as_u64()),
+                "transaction_hash": format!("{:?}", log.transaction_hash),
+            });
             
-            // 处理事件并发送更新
-             Self::handle_swap_event_update(swap_event, msg_sender, pairs).await
+            // 获取合约信息
+            let contract_info = contracts.values().find(|info| info.address == log.address);
+            
+            // 发送原始事件数据
+            Self::send_raw_event("V2SwapEvent", log.address, contract_info, event_data, msg_sender).await
          } else {
              warn!("V2 Swap事件数据格式不正确: topics={}, data_len={}", log.topics.len(), log.data.len());
              Ok(())
@@ -445,8 +373,7 @@ impl EventListener {
      async fn process_v3_swap_event(
           log: &Log,
           contracts: &HashMap<String, ContractInfo>,
-          msg_sender: &mpsc::Sender<DisplayMessage>,
-          pairs: &Vec<PairData>,
+          msg_sender: &mpsc::Sender<RawEventData>,
       ) -> Result<()> {
          let contract_name = contracts.iter()
              .find(|(_, contract_info)| contract_info.address == log.address)
@@ -479,196 +406,69 @@ impl EventListener {
              info!("V3 Swap: sender={:?}, recipient={:?}, amount0={}, amount1={}, sqrtPriceX96={}, liquidity={}, tick={}", 
                    sender_addr, recipient, amount0, amount1, sqrt_price_x96, liquidity, tick);
              
-             // 创建V3SwapEvent
-             let swap_event = EventType::V3SwapEvent {
-                 pair_address: log.address,
-                 sender: sender_addr,
-                 recipient,
-                 amount0,
-                 amount1,
-                 sqrt_price_x96,
-                 liquidity,
-                 tick,
-             };
+             // 创建原始事件数据
+             let event_data = serde_json::json!({
+                 "event_type": "V3SwapEvent",
+                 "pair_address": format!("{:?}", log.address),
+                 "sender": format!("{:?}", sender_addr),
+                 "recipient": format!("{:?}", recipient),
+                 "amount0": amount0.to_string(),
+                 "amount1": amount1.to_string(),
+                 "sqrt_price_x96": sqrt_price_x96.to_string(),
+                 "liquidity": liquidity,
+                 "tick": tick,
+                 "block_number": log.block_number.map(|n| n.as_u64()),
+                 "transaction_hash": format!("{:?}", log.transaction_hash),
+             });
              
-             // 处理事件并发送更新
-              Self::handle_swap_event_update(swap_event, msg_sender, pairs).await
+             // 获取合约信息
+             let contract_info = contracts.values().find(|info| info.address == log.address);
+             
+             // 发送原始事件数据
+             Self::send_raw_event("V3SwapEvent", log.address, contract_info, event_data, msg_sender).await
          } else {
              warn!("V3 Swap事件数据格式不正确: topics={}, data_len={}", log.topics.len(), log.data.len());
              Ok(())
          }
      }
      
-     // 通用的事件更新处理方法
-     async fn handle_swap_event_update(
-         swap_event: EventType,
-         msg_sender: &mpsc::Sender<DisplayMessage>,
-         pairs: &Vec<PairData>,
+     // 发送原始事件数据
+     async fn send_raw_event(
+         event_type: &str,
+         contract_address: H160,
+         contract_info: Option<&ContractInfo>,
+         event_data: serde_json::Value,
+         msg_sender: &mpsc::Sender<RawEventData>,
      ) -> Result<()> {
-         // 根据事件类型获取交易对地址
-         let pair_address = match &swap_event {
-             EventType::V2SwapEvent { pair_address, .. } => *pair_address,
-             EventType::V3SwapEvent { pair_address, .. } => *pair_address,
-             _ => return Ok(()),
+         let contract_metadata = contract_info.map(|info| ContractMetadata {
+             protocol_type: info.protocol_type.clone(),
+             dex: info.dex.clone(),
+             name: format!("{:?}", contract_address), // 可以改为更友好的名称
+         });
+
+         let raw_event = RawEventData {
+             event_type: event_type.to_string(),
+             contract_address: format!("{:?}", contract_address),
+             contract_info: contract_metadata,
+             raw_data: event_data,
+             timestamp: std::time::SystemTime::now()
+                 .duration_since(std::time::UNIX_EPOCH)
+                 .unwrap_or_default()
+                 .as_secs(),
          };
          
-         // 查找对应的交易对数据
-         if let Some((index, pair)) = pairs.iter().enumerate()
-             .find(|(_, pair)| {
-                 if let Ok(addr) = pair.id.parse::<H160>() {
-                     addr == pair_address
-                 } else {
-                     false
-                 }
-             }) {
-             
-             let pair_name = format!("{}/{}", pair.token0.symbol, pair.token1.symbol);
-             debug!("找到匹配的交易对: {} (索引: {})", pair_name, index);
-             
-             // 将 PairData 转换为 PairDisplay
-             let pair_display = PairDisplayConverter::convert_for_event(pair, index + 1);
-             
-             // 显示pair详细信息
-             info!("📊 交易对更新: {} | 协议: {} | DEX: {} | 价格: {} | 成交量: ${:.2} | 储备: ${:.2}", 
-                 pair_name, 
-                 pair.protocol_type, 
-                 pair.dex,
-                 pair_display.price,
-                 pair.volume_usd.parse::<f64>().unwrap_or(0.0),
-                 pair.reserve_usd.parse::<f64>().unwrap_or(0.0)
-             );
-             
-             // 发送局部更新消息
-             let message = DisplayMessage::PartialUpdate {
-                 index,
-                 data: pair_display,
-             };
-             
-             if let Err(e) = msg_sender.send(message).await {
-                 error!("发送局部更新消息失败: {}", e);
-             } else {
-                 debug!("已发送交易对 {} 的局部更新", pair_name);
-             }
+         if let Err(e) = msg_sender.send(raw_event).await {
+             error!("发送原始事件数据失败: {}", e);
          } else {
-             debug!("未找到匹配的交易对，地址: {:?}", pair_address);
+             debug!("已发送 {} 事件的原始数据", event_type);
          }
          
          Ok(())
      }
 
-    async fn process_swap_event(
-        log: &Log, 
-        sender: &mpsc::Sender<DisplayMessage>, 
-        contracts: &HashMap<String, H160>,
-        pairs: Vec<PairData>,
-    ) -> Result<()> {
-        Self::process_swap_event_common(log, sender, &HashMap::new(), &pairs).await
-    }
-    
-    async fn process_swap_event_common(
-        log: &Log, 
-        sender: &mpsc::Sender<DisplayMessage>, 
-        contracts: &HashMap<String, ContractInfo>,
-        pairs: &Vec<PairData>,
-    ) -> Result<()> {
-        // 查找合约名称
-        let contract_name = contracts.iter()
-            .find(|(_, contract_info)| contract_info.address == log.address)
-            .map(|(name, _)| name.clone())
-            .unwrap_or_else(|| format!("{:?}", log.address));
-        
-        // 解析Swap事件的具体数据
-        debug!("处理来自合约 {} 的Swap事件", contract_name);
-                
-        // 查找与事件相关的交易对索引
-         if let Some((index, pair)) = pairs.iter().enumerate()
-             .find(|(_, pair)| {
-                 // 这里需要根据实际情况匹配交易对
-                 // 可以通过合约地址或其他标识符来匹配
-                 if let Ok(pair_address) = pair.id.parse::<H160>() {
-                     pair_address == log.address
-                 } else {
-                     false
-                 }
-             }) {
-             
-             let pair_name = format!("{}/{}", pair.token0.symbol, pair.token1.symbol);
-             
-             // 将 PairData 转换为 PairDisplay（使用统一的转换工具）
-             let updated_pair_display = PairDisplayConverter::convert_for_event(pair, index + 1);
-             
-             // 发送局部更新消息
-             if let Err(e) = sender.send(DisplayMessage::PartialUpdate { 
-                 index, 
-                 data: updated_pair_display 
-             }).await {
-                 error!("发送局部更新失败: {}", e);
-             } else {
-                 info!("已发送交易对 {} 的局部更新 (索引: {})", pair_name, index);
-             }
-        } else {
-            // 如果找不到对应的交易对，记录警告
-            warn!("未找到与合约地址 {:?} 对应的交易对", log.address);
-        }
-        
-        Ok(())
-    }
-
-    async fn fetch_and_process_data_static(database: &Database, count: usize) -> Result<Vec<PairDisplay>> {
-        // 从数据库获取最新的交易对数据
-        let pair_manager = crate::data::pair_manager::PairManager::new(&database);
-        let pairs = pair_manager.load_pairs_by_filter(None, None, Some(count))?;
-        
-        // 转换为显示格式（使用统一的转换工具）
-        let display_pairs = PairDisplayConverter::convert_owned(pairs)?;
-        
-        Ok(display_pairs)
-    }
-    
-    async fn fetch_and_process_data(&self) -> Result<Vec<PairDisplay>> {
-        Self::fetch_and_process_data_static(&self.database, self.count).await
-    }
-    
-    /// 更新缓存数据
-    async fn update_cache(&self) -> Result<()> {
-        // 这个方法暂时不需要实现，因为我们直接使用pairs字段
-        Ok(())
-    }
-    
-    async fn handle_price_update_event(&self) -> Result<()> {
-        // 获取最新数据并推送更新
-        let pairs = self.fetch_and_process_data().await?;
-        if !pairs.is_empty() {
-            self.sender.send(DisplayMessage::FullUpdate(pairs)).await
-                .map_err(|e| anyhow::anyhow!("发送价格更新消息失败: {}", e))?;
-        }
-        Ok(())
-    }
-    
-    async fn handle_liquidity_change_event(&self) -> Result<()> {
-        // 获取最新数据并推送更新
-        let pairs = self.fetch_and_process_data().await?;
-        if !pairs.is_empty() {
-            self.sender.send(DisplayMessage::FullUpdate(pairs)).await
-                .map_err(|e| anyhow::anyhow!("发送流动性更新消息失败: {}", e))?;
-        }
-        Ok(())
-    }
-    
-    async fn handle_new_pair_event(&self) -> Result<()> {
-        // 获取最新数据并推送更新
-        let pairs = self.fetch_and_process_data().await?;
-        if !pairs.is_empty() {
-            self.sender.send(DisplayMessage::FullUpdate(pairs)).await
-                .map_err(|e| anyhow::anyhow!("发送新交易对消息失败: {}", e))?;
-        }
-        Ok(())
-    }
-    
     pub async fn shutdown(&self) -> Result<()> {
         info!("正在关闭事件监听器...");
-        self.sender.send(DisplayMessage::Shutdown).await
-            .map_err(|e| anyhow::anyhow!("发送关闭消息失败: {}", e))?;
+        // EventListener 现在只发送原始事件数据，关闭逻辑由调用方处理
         Ok(())
     }
 }
