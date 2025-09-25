@@ -3,13 +3,14 @@ use std::str::FromStr;
 use std::sync::{Arc, Mutex};
 use bigdecimal::{BigDecimal, FromPrimitive, ToPrimitive, Zero};
 use anyhow::{Result, anyhow};
-use log::{info, warn, debug};
+use log::{info, warn, debug, error};
 use chrono::{DateTime, Utc};
-use tokio::sync::mpsc;
+use tokio::sync::{broadcast};
+use tokio::task::JoinHandle;
 use crate::store::pair_manager::PairData;
 use crate::price_calculator::PriceCalculator;
 use crate::config::protocol_types;
-use crate::event_listener::{EventListener, RawEventData};
+use crate::event_listener::{EventListener, RawEventData, SubscriptionId};
 use super::exchange_edge::ExchangeEdge;
 use super::arbitrage_path::ArbitragePath;
 
@@ -22,21 +23,51 @@ pub struct ExchangeGraph {
     pub adjacency_list: HashMap<String, Vec<ExchangeEdge>>, // 代币交换关系的邻接表
     pub tokens: HashSet<String>,                             // 所有代币符号的集合
     pub last_updated: DateTime<Utc>,         // 最后更新时间
-    /// EventListener的sender，用于发送交易对信息
-    pub event_sender: Option<mpsc::Sender<RawEventData>>,
+    /// 跟踪已更新的 pair 集合
+    pub pair_updated_flags: HashSet<String>,                // 已更新的 pair_id 集合
+    /// 订阅ID，用于管理事件订阅
+    subscription_id: Option<SubscriptionId>,
+    /// 事件处理任务句柄
+    event_handler_task: Option<JoinHandle<()>>,
 }
 
 impl ExchangeGraph {
-    pub fn new(event_listener: Arc<Mutex<EventListener>>) -> Self {
-        Self {
+    pub fn new(event_listener: Arc<Mutex<EventListener>>, pairs: Option<&[PairData]>) -> Result<Self> {
+        let mut graph = Self {
             event_listener,
             pairs: HashMap::new(),
             adjacency_list: HashMap::new(),
             tokens: HashSet::new(),
             last_updated: Utc::now(),
-            event_sender: None,
+            pair_updated_flags: HashSet::new(),
+            subscription_id: None,
+            event_handler_task: None,
+        };
+
+        if let Some(pair_data) = pairs {
+            info!("开始从PairData构建价格图，交易对数量: {}", pair_data.len());
+            
+            let mut edge_count = 0;
+            let mut skipped_count = 0;
+            
+            for pair in pair_data {
+                let (success, added_edges) = graph.add_pair(pair);
+                if success {
+                    edge_count += added_edges;
+                } else {
+                    skipped_count += 1;
+                }
+            }
+
+            graph.last_updated = Utc::now();
+            info!("从PairData构建价格图完成，代币数量: {}, 边数量: {}, 跳过: {}", 
+                  graph.tokens.len(), edge_count, skipped_count);
         }
+        
+        Ok(graph)
     }
+
+
 
     pub fn add_edge(&mut self, edge: ExchangeEdge) {
         self.tokens.insert(edge.from_token.clone());
@@ -117,6 +148,36 @@ impl ExchangeGraph {
         self.pairs.get(pair_id).cloned()
     }
 
+    /// 检查指定 pair 是否已更新
+    pub fn is_pair_updated(&self, pair_id: &str) -> bool {
+        self.pair_updated_flags.contains(pair_id)
+    }
+
+    /// 标记指定 pair 为已更新
+    pub fn mark_pair_updated(&mut self, pair_id: &str) {
+        self.pair_updated_flags.insert(pair_id.to_string());
+    }
+
+    /// 重置指定 pair 的更新状态（标记为未更新）
+    pub fn reset_pair_update_flag(&mut self, pair_id: &str) {
+        self.pair_updated_flags.remove(pair_id);
+    }
+
+    /// 获取所有已更新的 pair 数量
+    pub fn get_updated_pairs_count(&self) -> usize {
+        self.pair_updated_flags.len()
+    }
+
+    /// 获取所有已更新的 pair ID 列表
+    pub fn get_updated_pair_ids(&self) -> Vec<String> {
+        self.pair_updated_flags.iter().cloned().collect()
+    }
+
+    /// 重置所有 pair 的更新状态
+    pub fn reset_all_update_flags(&mut self) {
+        self.pair_updated_flags.clear();
+    }
+
     /// 从PairData数据构建图
     /// 添加单个交易对数据到图中
     /// 返回 (是否成功添加, 添加的边数量)
@@ -158,6 +219,8 @@ impl ExchangeGraph {
                 // 存储 pair 数据
                 self.pairs.insert(pair.id.clone(), Arc::new(pair.clone()));
                 
+                // 新添加的 pair 默认为未更新状态（不在 Set 中）
+                
                 if let Ok(mut listener) = self.event_listener.lock() {
                     let _ = listener.add_pair(pair.clone());
                 }
@@ -171,67 +234,26 @@ impl ExchangeGraph {
         }
     }
 
-    pub async fn from_pair_data(
-        &mut self, 
-        pair_data: &[PairData],
-    ) -> Result<()> {
-        info!("开始从PairData构建价格图，交易对数量: {}", pair_data.len());
-        
-        // 清空现有数据
-        self.adjacency_list.clear();
-        self.tokens.clear();
-        self.pairs.clear();
-        
-        let mut edge_count = 0;
-        let mut skipped_count = 0;
-        
-        for pair in pair_data {
-            let (success, added_edges) = self.add_pair(pair);
-            if success {
-                edge_count += added_edges;
-            } else {
-                skipped_count += 1;
+
+
+    pub fn update_pair_data_once(&mut self, pair: &PairData) -> Result<()> {
+        match self.pair_updated_flags.get(pair.id.as_str()) {
+            Some(_) => {
+            }
+            None => {
+                // 未更新，标记为已更新
+                let _ = self.update_pair_data(pair);
             }
         }
-
-        self.last_updated = Utc::now();
-        info!("从PairData构建价格图完成，代币数量: {}, 边数量: {}, 跳过: {}", 
-              self.tokens.len(), edge_count, skipped_count);
-        
         Ok(())
     }
+
 
     /// 更新单个交易对的数据
     /// 如果交易对已存在，会移除旧的边并添加新的边
     /// 直接更新交易对数据，优先更新现有边而不是删除重建
     /// 如果交易对不存在，会添加新的边
     pub fn update_pair_data(&mut self, pair: &PairData) -> Result<()> {
-        info!("更新交易对数据: {} ({} <-> {})", pair.id, pair.token0.symbol, pair.token1.symbol);
-        
-        // 验证交易对数据
-        self.validate_pair_data(pair)?;
-
-        // 使用PriceCalculator根据协议类型计算价格
-        let price_1_per_0 = PriceCalculator::calculate_price_from_pair(pair)
-            .map_err(|e| anyhow!("价格计算失败: {}", e))?;
-        
-        // 计算反向价格 (token0/token1)
-        if price_1_per_0.is_zero() {
-            return Err(anyhow!("价格为零，无法更新交易对: {}", pair.id));
-        }
-        
-        let price_0_per_1 = BigDecimal::from(1) / &price_1_per_0;
-        
-        // 验证反向价格是否合理
-        let min_price = BigDecimal::from_str("1e-18").unwrap();
-        let max_price = BigDecimal::from_str("1e18").unwrap();
-        
-        if price_0_per_1 < min_price || price_0_per_1 > max_price {
-            return Err(anyhow!("异常反向价格的交易对 {}: 原价格={}, 反向价格={}", 
-                              pair.id, price_1_per_0, price_0_per_1));
-        }
-   info!("更新交易对数据: {} ({} <-> {})", pair.id, pair.token0.symbol, pair.token1.symbol);
-        
         // 验证交易对数据
         self.validate_pair_data(pair)?;
 
@@ -322,6 +344,8 @@ impl ExchangeGraph {
         // 更新pairs字段中的PairData
         self.pairs.insert(pair.id.clone(), Arc::new(pair.clone()));
         
+        self.mark_pair_updated(pair.id.as_str());
+
         self.last_updated = Utc::now();
         info!("交易对 {} 更新完成", pair.id);
         
@@ -387,6 +411,9 @@ impl ExchangeGraph {
         
         // 从pairs字段中移除PairData
         self.pairs.remove(pair_id);
+        
+        // 移除对应的更新标记
+        self.pair_updated_flags.remove(pair_id);
         
         self.last_updated = Utc::now();
         
@@ -491,6 +518,330 @@ impl ExchangeGraph {
         self.pairs.clear();
         self.adjacency_list.clear();
         self.tokens.clear();
+        self.pair_updated_flags.clear();
+    }
+
+    /// 启动事件订阅（静态方法）
+    pub fn start_subscription(&mut self, graph_ref: Arc<Mutex<Self>>) -> Result<()> {
+        if self.subscription_id.is_some() {
+            warn!("ExchangeGraph已经订阅了事件，跳过重复订阅");
+            return Ok(());
+        }
+        
+        let event_listener = Arc::clone(&self.event_listener);
+        
+        // 订阅事件
+        let (receiver, handle) = {
+            let mut listener = event_listener.lock().unwrap();
+            listener.subscribe()
+        };
+        
+        let subscription_id = handle.id;
+        info!("ExchangeGraph成功订阅事件，订阅ID: {:?}", subscription_id);
+        self.subscription_id = Some(subscription_id);
+        
+        // 启动事件处理任务
+        let task_handle = tokio::spawn(Self::event_handler_task(graph_ref, receiver));
+        self.event_handler_task = Some(task_handle);
+        
+        info!("ExchangeGraph事件处理任务已启动");
+        
+        Ok(())
+    }
+
+    /// 停止事件订阅
+    pub fn stop_subscription(&mut self) -> Result<()> {
+        // 取消订阅
+        if let Some(subscription_id) = &self.subscription_id {
+            let mut listener = self.event_listener.lock().unwrap();
+            listener.unsubscribe(*subscription_id)?;
+            info!("ExchangeGraph取消事件订阅，订阅ID: {:?}", subscription_id);
+            self.subscription_id = None;
+        }
+
+        // 停止事件处理任务
+        if let Some(handle) = self.event_handler_task.take() {
+            handle.abort();
+            debug!("ExchangeGraph事件处理任务已停止");
+        }
+
+        Ok(())
+    }
+
+    /// 事件处理任务
+    async fn event_handler_task(
+        graph: Arc<Mutex<ExchangeGraph>>,
+        mut receiver: broadcast::Receiver<RawEventData>,
+    ) {
+        info!("ExchangeGraph事件处理任务已启动");
+
+        while let Ok(event) = receiver.recv().await {
+            let mut graph_guard = match graph.lock() {
+                Ok(guard) => guard,
+                Err(e) => {
+                    error!("无法获取ExchangeGraph锁: {}", e);
+                    continue;
+                }
+            };
+            
+            if let Err(e) = graph_guard.handle_event(event) {
+                error!("处理事件时发生错误: {}", e);
+            }
+        }
+
+        info!("ExchangeGraph事件处理任务已结束");
+    }
+
+    /// 处理单个事件
+    fn handle_event(&mut self, event: RawEventData) -> Result<()> {
+        debug!("ExchangeGraph收到事件: {:?}", event);
+
+        // 根据事件类型处理
+        match event.event_type.as_str() {
+            "Sync" | "Mint" | "Burn" => {
+                self.handle_pair_update_event(event)?;
+            }
+            "V2SwapEvent" => {
+                self.handle_v2_swap_event(event)?;
+            }
+            "V3SwapEvent" => {
+                self.handle_v3_swap_event(event)?;
+            }
+            _ => {
+                debug!("忽略未知事件类型: {}", event.event_type);
+            }
+        }
+
+        Ok(())
+    }
+
+    /// 处理交易对更新事件
+    fn handle_pair_update_event(&mut self, event: RawEventData) -> Result<()> {
+        let pair_address = event.contract_address.to_lowercase();
+        
+        // 从合约信息中获取网络信息，如果没有则使用默认值
+        let network = if let Some(contract_info) = &event.contract_info {
+            "ethereum" // 默认网络，可以根据实际情况调整
+        } else {
+            "ethereum"
+        };
+        
+        // 查找对应的交易对
+        let pair_id = format!("{}_{}", pair_address, network);
+        
+        if let Some(pair_arc) = self.pairs.get(&pair_id) {
+            // 创建更新后的交易对数据
+            let mut updated_pair = (**pair_arc).clone();
+            
+            // 根据事件数据更新交易对信息
+            if let Some(reserve0_value) = event.raw_data.get("reserve0") {
+                if let Some(reserve0_str) = reserve0_value.as_str() {
+                    updated_pair.reserve0 = reserve0_str.to_string();
+                }
+            }
+            if let Some(reserve1_value) = event.raw_data.get("reserve1") {
+                if let Some(reserve1_str) = reserve1_value.as_str() {
+                    updated_pair.reserve1 = reserve1_str.to_string();
+                }
+            }
+            
+            // 更新图中的数据
+            if let Err(e) = self.update_pair_data(&updated_pair) {
+                error!("更新交易对数据失败: {}, pair_id: {}", e, pair_id);
+            } else {
+                debug!("成功更新交易对数据: {}", pair_id);
+                self.last_updated = Utc::now();
+            }
+        } else {
+            debug!("未找到对应的交易对: {}", pair_id);
+        }
+
+        Ok(())
+    }
+
+    /// 处理V2 Swap事件
+    fn handle_v2_swap_event(&mut self, event: RawEventData) -> Result<()> {
+        let pair_address = event.contract_address.to_lowercase();
+        
+        // 从合约信息中获取网络信息
+        let network = if let Some(contract_info) = &event.contract_info {
+            "ethereum" // 默认网络，可以根据实际情况调整
+        } else {
+            "ethereum"
+        };
+        
+        // 查找对应的交易对
+        let pair_id = format!("{}_{}", pair_address, network);
+        
+        if let Some(pair_arc) = self.pairs.get(&pair_id) {
+            // 从V2 Swap事件中提取交易量信息
+            let amount0_in = event.raw_data.get("amount0_in")
+                .and_then(|v| v.as_str())
+                .unwrap_or("0");
+            let amount1_in = event.raw_data.get("amount1_in")
+                .and_then(|v| v.as_str())
+                .unwrap_or("0");
+            let amount0_out = event.raw_data.get("amount0_out")
+                .and_then(|v| v.as_str())
+                .unwrap_or("0");
+            let amount1_out = event.raw_data.get("amount1_out")
+                .and_then(|v| v.as_str())
+                .unwrap_or("0");
+            
+            // 计算储备量变化（这是一个简化的计算，实际应该从链上获取最新储备量）
+            let mut updated_pair = (**pair_arc).clone();
+            
+            // 对于V2，我们可以根据交易量估算储备量变化
+            // 注意：这只是一个近似计算，真实的储备量应该从Sync事件或直接查询合约获得
+            if let (Ok(reserve0), Ok(amount0_in_val), Ok(amount0_out_val)) = (
+                updated_pair.reserve0.parse::<u128>(),
+                amount0_in.parse::<u128>(),
+                amount0_out.parse::<u128>()
+            ) {
+                let new_reserve0 = reserve0 + amount0_in_val - amount0_out_val;
+                updated_pair.reserve0 = new_reserve0.to_string();
+            }
+            
+            if let (Ok(reserve1), Ok(amount1_in_val), Ok(amount1_out_val)) = (
+                updated_pair.reserve1.parse::<u128>(),
+                amount1_in.parse::<u128>(),
+                amount1_out.parse::<u128>()
+            ) {
+                let new_reserve1 = reserve1 + amount1_in_val - amount1_out_val;
+                updated_pair.reserve1 = new_reserve1.to_string();
+            }
+            
+            // 更新图中的数据
+            if let Err(e) = self.update_pair_data(&updated_pair) {
+                error!("更新V2 Swap交易对数据失败: {}, pair_id: {}", e, pair_id);
+            } else {
+                debug!("成功处理V2 Swap事件并更新交易对数据: {}", pair_id);
+                self.last_updated = Utc::now();
+            }
+        } else {
+            debug!("V2 Swap事件：未找到对应的交易对: {}", pair_id);
+        }
+
+        Ok(())
+    }
+
+    /// 处理V3 Swap事件
+    fn handle_v3_swap_event(&mut self, event: RawEventData) -> Result<()> {
+        let pair_address = event.contract_address.to_lowercase();
+        
+        // 从合约信息中获取网络信息
+        let network = if let Some(contract_info) = &event.contract_info {
+            "ethereum" // 默认网络，可以根据实际情况调整
+        } else {
+            "ethereum"
+        };
+        
+        // 查找对应的交易对
+        let pair_id = format!("{}_{}", pair_address, network);
+        
+        if let Some(pair_arc) = self.pairs.get(&pair_id) {
+            // 从V3 Swap事件中提取信息
+            let amount0 = event.raw_data.get("amount0")
+                .and_then(|v| v.as_str())
+                .unwrap_or("0");
+            let amount1 = event.raw_data.get("amount1")
+                .and_then(|v| v.as_str())
+                .unwrap_or("0");
+            let sqrt_price_x96 = event.raw_data.get("sqrt_price_x96")
+                .and_then(|v| v.as_str())
+                .unwrap_or("0");
+            let liquidity = event.raw_data.get("liquidity")
+                .and_then(|v| {
+                    if let Some(n) = v.as_u64() {
+                        Some(n)
+                    } else if let Some(s) = v.as_str() {
+                        s.parse::<u64>().ok()
+                    } else {
+                        None
+                    }
+                })
+                .unwrap_or(0);
+            let tick = event.raw_data.get("tick")
+                .and_then(|v| {
+                    if let Some(n) = v.as_i64() {
+                        Some(n)
+                    } else if let Some(s) = v.as_str() {
+                        s.parse::<i64>().ok()
+                    } else {
+                        None
+                    }
+                })
+                .unwrap_or(0);
+            
+            // 对于V3，我们主要关注价格变化（通过sqrtPriceX96）
+            let mut updated_pair = (**pair_arc).clone();
+            
+            // V3的储备量计算更复杂，这里我们主要更新价格相关信息
+             // 根据sqrtPriceX96计算当前价格并更新交易对信息
+             if let Ok(sqrt_price) = sqrt_price_x96.parse::<u128>() {
+                 // sqrtPriceX96 = sqrt(price) * 2^96
+                 // price = (sqrtPriceX96 / 2^96)^2
+                 // 为了避免浮点数精度问题，我们可以计算一个简化的价格比率
+                 
+                 // 计算价格（token1/token0的比率）
+                 // 这是一个简化的计算，实际应用中可能需要更精确的数学库
+                 let price_ratio = if sqrt_price > 0 {
+                     // 简化计算：(sqrt_price / 2^48)^2 / 2^48，避免溢出
+                     let sqrt_price_scaled = sqrt_price >> 48; // 除以2^48
+                     if sqrt_price_scaled > 0 {
+                         (sqrt_price_scaled * sqrt_price_scaled) >> 48 // 再除以2^48
+                     } else {
+                         1
+                     }
+                 } else {
+                     1
+                 };
+                 
+                 // 更新交易对的价格信息（如果PairData结构支持的话）
+                 // 这里我们可以在reserve字段中存储价格信息，或者扩展PairData结构
+                 debug!("V3 Swap价格更新: sqrt_price_x96={}, price_ratio={}, tick={}, liquidity={}", 
+                        sqrt_price, price_ratio, tick, liquidity);
+                 
+                 // 对于V3，我们可以根据amount0和amount1的变化来估算虚拟储备量
+                 if let (Ok(amt0), Ok(amt1)) = (amount0.parse::<i128>(), amount1.parse::<i128>()) {
+                     // V3的amount可能是负数（表示流出）
+                     // 我们可以根据交易量和当前价格来更新虚拟储备量
+                     if let (Ok(current_reserve0), Ok(current_reserve1)) = (
+                         updated_pair.reserve0.parse::<u128>(),
+                         updated_pair.reserve1.parse::<u128>()
+                     ) {
+                         // 简化的储备量更新逻辑
+                         // 实际应该根据V3的流动性分布和价格范围计算
+                         let new_reserve0 = if amt0 >= 0 {
+                             current_reserve0.saturating_add(amt0 as u128)
+                         } else {
+                             current_reserve0.saturating_sub((-amt0) as u128)
+                         };
+                         
+                         let new_reserve1 = if amt1 >= 0 {
+                             current_reserve1.saturating_add(amt1 as u128)
+                         } else {
+                             current_reserve1.saturating_sub((-amt1) as u128)
+                         };
+                         
+                         updated_pair.reserve0 = new_reserve0.to_string();
+                         updated_pair.reserve1 = new_reserve1.to_string();
+                     }
+                 }
+             }
+            
+            // 更新图中的数据
+            if let Err(e) = self.update_pair_data(&updated_pair) {
+                error!("更新V3 Swap交易对数据失败: {}, pair_id: {}", e, pair_id);
+            } else {
+                debug!("成功处理V3 Swap事件并更新交易对数据: {}", pair_id);
+                self.last_updated = Utc::now();
+            }
+        } else {
+            debug!("V3 Swap事件：未找到对应的交易对: {}", pair_id);
+        }
+
+        Ok(())
     }
 
     /// 寻找套利路径

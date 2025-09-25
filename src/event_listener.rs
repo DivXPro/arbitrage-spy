@@ -1,6 +1,6 @@
 use anyhow::Result;
 use log::{error, info, debug, warn};
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, broadcast};
 use ethers::{
     prelude::*,
     providers::{Provider, StreamExt},
@@ -9,6 +9,8 @@ use ethers::{
 use std::sync::Arc;
 use std::collections::HashMap;
 use std::env;
+use std::sync::atomic::{AtomicU64, Ordering};
+use tokio::sync::oneshot;
 
 
 use crate::store::pair_manager::PairData;
@@ -47,34 +49,200 @@ pub struct ContractInfo {
     pub dex: String,      // dex_types::UNISWAP_V2, dex_types::UNISWAP_V3, etc.
 }
 
+/// 订阅ID类型
+pub type SubscriptionId = u64;
+
+/// 订阅信息
+#[derive(Debug)]
+pub struct Subscription {
+    pub id: SubscriptionId,
+    pub receiver: broadcast::Receiver<RawEventData>,
+    pub cancel_tx: oneshot::Sender<()>,
+}
+
+/// 订阅句柄，用于管理订阅的生命周期
+#[derive(Debug)]
+pub struct SubscriptionHandle {
+    pub id: SubscriptionId,
+    pub cancel_tx: oneshot::Sender<()>,
+}
+
+/// 订阅统计信息
+#[derive(Debug, Clone)]
+pub struct SubscriptionStats {
+    pub total_created: u64,
+    pub currently_active: usize,
+    pub total_cancelled: u64,
+}
+
 pub struct EventListener {
-    sender: Option<mpsc::Sender<RawEventData>>,
+    sender: broadcast::Sender<RawEventData>,
     provider: Option<Arc<Provider<ethers::providers::Ws>>>,
     contracts: HashMap<String, ContractInfo>,
+    next_subscription_id: AtomicU64,
+    active_subscriptions: HashMap<SubscriptionId, oneshot::Receiver<()>>,
+    total_cancelled: AtomicU64,
 }
 
 impl EventListener {
-    pub async fn new(
-        sender: Option<mpsc::Sender<RawEventData>>,
-    ) -> Self {
-        info!("正在创建EventListener实例...");
+    /// 创建EventListener实例，使用默认通道容量(1000)
+    pub async fn new() -> Self {
+        Self::with_capacity(10).await
+    }
+    
+    /// 创建EventListener实例，指定通道容量
+    pub async fn with_capacity(capacity: usize) -> Self {
+        info!("正在创建EventListener实例，通道容量: {}...", capacity);
+        
+        // 内部创建广播通道
+        let (sender, _) = broadcast::channel(capacity);
         
         // 尝试连接到以太坊WebSocket
         let provider = Self::try_connect_to_ethereum().await;
         
-        // 初始化空的合约映射，稍后通过方法添加
-        let contracts = HashMap::new();
         info!("EventListener实例创建完成，等待添加合约监听");
 
         Self {
             sender,
             provider,
-            contracts,
+            contracts: HashMap::<String, ContractInfo>::new(),
+            next_subscription_id: AtomicU64::new(1),
+            active_subscriptions: HashMap::<SubscriptionId, oneshot::Receiver<()>>::new(),
+            total_cancelled: AtomicU64::new(0),
+        }
+    }
+    
+    /// 创建EventListener实例并返回接收器（工厂函数模式）
+    pub async fn create_with_receiver(capacity: usize) -> (Self, broadcast::Receiver<RawEventData>) {
+        info!("正在创建EventListener实例和接收器，通道容量: {}...", capacity);
+        
+        // 创建广播通道
+        let (sender, receiver) = broadcast::channel(capacity);
+        
+        // 尝试连接到以太坊WebSocket
+        let provider = Self::try_connect_to_ethereum().await;
+        
+        info!("EventListener实例和接收器创建完成");
+
+        let listener = Self {
+            sender,
+            provider,
+            contracts: HashMap::<String, ContractInfo>::new(),
+            next_subscription_id: AtomicU64::new(1),
+            active_subscriptions: HashMap::<SubscriptionId, oneshot::Receiver<()>>::new(),
+            total_cancelled: AtomicU64::new(0),
+        };
+        
+        (listener, receiver)
+    }
+    
+    /// 高级API：使用外部提供的sender创建实例（向后兼容）
+    pub async fn with_sender(sender: broadcast::Sender<RawEventData>) -> Self {
+        info!("正在使用外部sender创建EventListener实例...");
+        
+        // 尝试连接到以太坊WebSocket
+        let provider = Self::try_connect_to_ethereum().await;
+        
+        info!("EventListener实例创建完成，等待添加合约监听");
+
+        Self {
+            sender,
+            provider,
+            contracts: HashMap::<String, ContractInfo>::new(),
+            next_subscription_id: AtomicU64::new(1),
+            active_subscriptions: HashMap::<SubscriptionId, oneshot::Receiver<()>>::new(),
+            total_cancelled: AtomicU64::new(0),
+        }
+    }
+    
+    /// 创建一个可管理的订阅，返回接收器和句柄
+    pub fn subscribe(&mut self) -> (broadcast::Receiver<RawEventData>, SubscriptionHandle) {
+        let id = self.next_subscription_id.fetch_add(1, Ordering::SeqCst);
+        let receiver = self.sender.subscribe();
+        let (cancel_tx, cancel_rx) = oneshot::channel();
+        
+        // 存储取消接收器
+        self.active_subscriptions.insert(id, cancel_rx);
+        
+        let handle = SubscriptionHandle {
+            id,
+            cancel_tx,
+        };
+        
+        (receiver, handle)
+    }
+
+    /// 取消指定ID的订阅
+    pub fn unsubscribe(&mut self, subscription_id: SubscriptionId) -> Result<()> {
+        if let Some(cancel_rx) = self.active_subscriptions.remove(&subscription_id) {
+            // 丢弃cancel_rx，这会导致对应的cancel_tx发送失败，从而通知订阅者取消
+            drop(cancel_rx);
+            self.total_cancelled.fetch_add(1, Ordering::SeqCst);
+            info!("已取消订阅 ID: {}", subscription_id);
+            Ok(())
+        } else {
+            warn!("未找到订阅 ID: {}", subscription_id);
+            Err(anyhow::anyhow!("订阅 ID {} 不存在", subscription_id))
         }
     }
 
-    pub fn set_sender(&mut self, sender: mpsc::Sender<RawEventData>) {
-        self.sender = Some(sender);
+    /// 通过句柄取消订阅
+    pub fn unsubscribe_by_handle(&mut self, handle: SubscriptionHandle) -> Result<()> {
+        let SubscriptionHandle { id, cancel_tx } = handle;
+        
+        // 发送取消信号
+        if cancel_tx.send(()).is_ok() {
+            // 从活跃订阅中移除
+            self.active_subscriptions.remove(&id);
+            self.total_cancelled.fetch_add(1, Ordering::SeqCst);
+            info!("已通过句柄取消订阅 ID: {}", id);
+            Ok(())
+        } else {
+            warn!("无法发送取消信号给订阅 ID: {}", id);
+            Err(anyhow::anyhow!("无法取消订阅 ID {}", id))
+        }
+    }
+
+    /// 取消所有活跃的订阅
+    pub fn unsubscribe_all(&mut self) -> Result<()> {
+        let count = self.active_subscriptions.len();
+        self.active_subscriptions.clear();
+        self.total_cancelled.fetch_add(count as u64, Ordering::SeqCst);
+        info!("已取消所有 {} 个活跃订阅", count);
+        Ok(())
+    }
+
+    /// 获取活跃订阅的数量
+    pub fn active_subscription_count(&self) -> usize {
+        self.active_subscriptions.len()
+    }
+
+    /// 获取当前活跃的接收者数量（广播发送器的接收者数量）
+    pub fn receiver_count(&self) -> usize {
+        self.sender.receiver_count()
+    }
+
+    /// 检查指定订阅是否仍然活跃
+    pub fn is_subscription_active(&self, subscription_id: SubscriptionId) -> bool {
+        self.active_subscriptions.contains_key(&subscription_id)
+    }
+
+    /// 获取订阅统计信息
+    pub fn get_subscription_stats(&self) -> SubscriptionStats {
+        let total_created = self.next_subscription_id.load(Ordering::SeqCst) - 1; // 减1因为从1开始
+        let currently_active = self.active_subscriptions.len();
+        let total_cancelled = self.total_cancelled.load(Ordering::SeqCst);
+        
+        SubscriptionStats {
+            total_created,
+            currently_active,
+            total_cancelled,
+        }
+    }
+
+    /// 列出所有活跃的订阅ID
+    pub fn list_active_subscriptions(&self) -> Vec<SubscriptionId> {
+        self.active_subscriptions.keys().copied().collect()
     }
 
     /// 从PairData批量添加要监听的合约
@@ -215,43 +383,36 @@ impl EventListener {
         info!("分离合约: V2={} 个, V3={} 个", v2_contracts.len(), v3_contracts.len());
         
         // 启动事件监听循环
-        match &self.sender {
-            Some(sender) => {
-                // 根据合约类型启动相应的监听器
-                if !v2_contracts.is_empty() && !v3_contracts.is_empty() {
-                    // 同时监听V2和V3
-                    tokio::select! {
-                        _ = Self::listen_v2_swap_events(v2_contracts, provider.clone(), sender.clone()) => {
-                            error!("V2 Swap事件监听意外停止");
-                        }
-                        _ = Self::listen_v3_swap_events(v3_contracts, provider.clone(), sender.clone()) => {
-                            error!("V3 Swap事件监听意外停止");
-                        }
-                    }
-                } else if !v2_contracts.is_empty() {
-                    // 只监听V2
-                    if let Err(e) = Self::listen_v2_swap_events(v2_contracts, provider.clone(), sender.clone()).await {
-                        error!("V2 Swap事件监听失败: {}", e);
-                    }
-                } else if !v3_contracts.is_empty() {
-                    // 只监听V3
-                    if let Err(e) = Self::listen_v3_swap_events(v3_contracts, provider.clone(), sender.clone()).await {
-                        error!("V3 Swap事件监听失败: {}", e);
-                    }
-                } else {
-                    warn!("没有任何合约需要监听，事件监听器将保持运行但不监听任何事件");
-                    // 保持运行，等待可能的关闭信号
-                    loop {
-                        tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
-                    }
+        let sender = self.sender.clone();
+        
+        // 根据合约类型启动相应的监听器
+        if !v2_contracts.is_empty() && !v3_contracts.is_empty() {
+            // 同时监听V2和V3
+            tokio::select! {
+                _ = Self::listen_v2_swap_events(v2_contracts, provider.clone(), sender.clone()) => {
+                    error!("V2 Swap事件监听意外停止");
                 }
-                
+                _ = Self::listen_v3_swap_events(v3_contracts, provider.clone(), sender.clone()) => {
+                    error!("V3 Swap事件监听意外停止");
+                }
             }
-            None => {
-                warn!("事件发送器未设置，无法启动事件监听");
-                return Ok(());
+        } else if !v2_contracts.is_empty() {
+            // 只监听V2
+            if let Err(e) = Self::listen_v2_swap_events(v2_contracts, provider.clone(), sender.clone()).await {
+                error!("V2 Swap事件监听失败: {}", e);
             }
-        };
+        } else if !v3_contracts.is_empty() {
+            // 只监听V3
+            if let Err(e) = Self::listen_v3_swap_events(v3_contracts, provider.clone(), sender.clone()).await {
+                error!("V3 Swap事件监听失败: {}", e);
+            }
+        } else {
+            warn!("没有任何合约需要监听，事件监听器将保持运行但不监听任何事件");
+            // 保持运行，等待可能的关闭信号
+            loop {
+                tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+            }
+        }
         
         info!("事件监听器已停止");
         Ok(())
@@ -261,7 +422,7 @@ impl EventListener {
     async fn listen_v2_swap_events(
         contracts: HashMap<String, ContractInfo>,
         provider: Arc<Provider<ethers::providers::Ws>>,
-        sender: mpsc::Sender<RawEventData>,
+        sender: broadcast::Sender<RawEventData>,
     ) -> Result<()> {
         if contracts.is_empty() {
             info!("没有V2合约需要监听");
@@ -296,7 +457,7 @@ impl EventListener {
     async fn listen_v3_swap_events(
         contracts: HashMap<String, ContractInfo>,
         provider: Arc<Provider<ethers::providers::Ws>>,
-        sender: mpsc::Sender<RawEventData>,
+        sender: broadcast::Sender<RawEventData>,
     ) -> Result<()> {
         if contracts.is_empty() {
             info!("没有V3合约需要监听");
@@ -332,7 +493,7 @@ impl EventListener {
     async fn process_v2_swap_event(
         log: &Log,
         contracts: &HashMap<String, ContractInfo>,
-        msg_sender: &mpsc::Sender<RawEventData>,
+        msg_sender: &broadcast::Sender<RawEventData>,
     ) -> Result<()> {
         let contract_name = contracts.iter()
             .find(|(_, contract_info)| contract_info.address == log.address)
@@ -384,7 +545,7 @@ impl EventListener {
      async fn process_v3_swap_event(
           log: &Log,
           contracts: &HashMap<String, ContractInfo>,
-          msg_sender: &mpsc::Sender<RawEventData>,
+          msg_sender: &broadcast::Sender<RawEventData>,
       ) -> Result<()> {
          let contract_name = contracts.iter()
              .find(|(_, contract_info)| contract_info.address == log.address)
@@ -449,7 +610,7 @@ impl EventListener {
          contract_address: H160,
          contract_info: Option<&ContractInfo>,
          event_data: serde_json::Value,
-         msg_sender: &mpsc::Sender<RawEventData>,
+         msg_sender: &broadcast::Sender<RawEventData>,
      ) -> Result<()> {
          let contract_metadata = contract_info.map(|info| ContractMetadata {
              protocol_type: info.protocol_type.clone(),
@@ -468,10 +629,12 @@ impl EventListener {
                  .as_secs(),
          };
          
-         if let Err(e) = msg_sender.send(raw_event).await {
-             error!("发送原始事件数据失败: {}", e);
+         // 使用广播发送，如果没有接收者也不会报错
+         let receiver_count = msg_sender.send(raw_event).unwrap_or(0);
+         if receiver_count > 0 {
+             debug!("已向 {} 个接收者广播 {} 事件的原始数据", receiver_count, event_type);
          } else {
-             debug!("已发送 {} 事件的原始数据", event_type);
+             debug!("广播 {} 事件的原始数据，但没有活跃的接收者", event_type);
          }
          
          Ok(())

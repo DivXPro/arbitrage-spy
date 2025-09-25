@@ -1,6 +1,6 @@
 use anyhow::Result;
 use log::{info, error};
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, broadcast};
 
 use crate::config::{dex_types, Config};
 use crate::store::database::Database;
@@ -71,21 +71,16 @@ impl RealTimeMonitor {
         count: usize,
     ) -> Result<()> {
         
-        // 创建原始事件数据通道
-        let (raw_event_sender, mut raw_event_receiver) = mpsc::channel::<RawEventData>(1000);
-        
         // 创建表格显示模块
         info!("正在创建表格显示模块");
         match TableDisplay::new(receiver, initial_data) {
             Ok(mut table_display) => {
                 info!("表格显示模块创建完成");
                 
-                // 创建事件监听模块，传递原始事件数据sender
+                // 创建事件监听模块和原始事件数据接收器
                 info!("正在创建事件监听模块");
                 
-                let mut event_listener = EventListener::new(
-                    Some(raw_event_sender),
-                ).await;
+                let (mut event_listener, mut raw_event_receiver) = EventListener::create_with_receiver(1000).await;
                 
                 // 添加要监听的交易对
                 if let Err(e) = event_listener.add_pairs(initial_pairs) {
@@ -97,15 +92,27 @@ impl RealTimeMonitor {
                 // 创建原始事件数据处理任务
                 let display_sender = sender.clone();
                 let event_processor_handle = tokio::spawn(async move {
-                    while let Some(raw_event) = raw_event_receiver.recv().await {
-                        // 在这里处理原始事件数据，转换为DisplayMessage
-                        info!("收到原始事件数据: {} from {}", raw_event.event_type, raw_event.contract_address);
-                        
-                        // 将原始事件数据包装为DisplayMessage发送给显示模块
-                        let display_message = DisplayMessage::RawEvent(raw_event);
-                        if let Err(e) = display_sender.send(display_message).await {
-                            error!("发送显示消息失败: {}", e);
-                            break;
+                    loop {
+                        match raw_event_receiver.recv().await {
+                            Ok(raw_event) => {
+                                // 在这里处理原始事件数据，转换为DisplayMessage
+                                info!("收到原始事件数据: {} from {}", raw_event.event_type, raw_event.contract_address);
+                                
+                                // 将原始事件数据包装为DisplayMessage发送给显示模块
+                                let display_message = DisplayMessage::RawEvent(raw_event);
+                                if let Err(e) = display_sender.send(display_message).await {
+                                    error!("发送显示消息失败: {}", e);
+                                    break;
+                                }
+                            }
+                            Err(broadcast::error::RecvError::Closed) => {
+                                info!("广播通道已关闭，事件处理器退出");
+                                break;
+                            }
+                            Err(broadcast::error::RecvError::Lagged(skipped)) => {
+                                error!("事件处理器滞后，跳过了 {} 条消息", skipped);
+                                // 继续处理，不退出
+                            }
                         }
                     }
                     info!("原始事件数据处理任务已退出");

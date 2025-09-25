@@ -319,11 +319,15 @@ impl CliApp {
         };
 
         let (token_count, edge_count) = ArbitrageTrade::get_graph_stats(&graph);
+        let last_updated = {
+            let graph_guard = graph.lock().unwrap();
+            graph_guard.last_updated
+        };
         info!("ExchangeGraph构建完成！");
         info!("统计信息:");
         info!("  - 代币数量: {}", token_count);
         info!("  - 边数量: {}", edge_count);
-        info!("  - 最后更新时间: {}", graph.last_updated);
+        info!("  - 最后更新时间: {}", last_updated);
 
         // 可以在这里添加更多的图分析功能
         // 例如：寻找套利机会、分析流动性等
