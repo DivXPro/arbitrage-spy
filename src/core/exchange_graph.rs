@@ -522,13 +522,22 @@ impl ExchangeGraph {
     }
 
     /// 启动事件订阅（静态方法）
-    pub fn start_subscription(&mut self, graph_ref: Arc<Mutex<Self>>) -> Result<()> {
+    pub async fn start_subscription(&mut self, graph_ref: Arc<Mutex<Self>>) -> Result<()> {
         if self.subscription_id.is_some() {
             warn!("ExchangeGraph已经订阅了事件，跳过重复订阅");
             return Ok(());
         }
         
         let event_listener = Arc::clone(&self.event_listener);
+        
+        // 先确保WebSocket连接已建立
+        {
+            let mut listener = event_listener.lock().unwrap();
+            if let Err(e) = listener.connect_to_ethereum().await {
+                warn!("无法连接到以太坊WebSocket，跳过事件订阅: {}", e);
+                return Ok(());
+            }
+        }
         
         // 订阅事件
         let (receiver, handle) = {

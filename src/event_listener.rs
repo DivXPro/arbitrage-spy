@@ -154,6 +154,43 @@ impl EventListener {
             total_cancelled: AtomicU64::new(0),
         }
     }
+
+    /// 创建EventListener实例但不立即连接WebSocket（用于避免DNS错误）
+    pub fn new_without_connection(capacity: usize) -> Self {
+        info!("正在创建EventListener实例（不连接WebSocket），通道容量: {}...", capacity);
+        
+        // 内部创建广播通道
+        let (sender, _) = broadcast::channel(capacity);
+        
+        info!("EventListener实例创建完成（未连接WebSocket），等待添加合约监听");
+
+        Self {
+            sender,
+            provider: None, // 不立即连接
+            contracts: HashMap::<String, ContractInfo>::new(),
+            next_subscription_id: AtomicU64::new(1),
+            active_subscriptions: HashMap::<SubscriptionId, oneshot::Receiver<()>>::new(),
+            total_cancelled: AtomicU64::new(0),
+        }
+    }
+
+    /// 延迟连接到以太坊WebSocket
+    pub async fn connect_to_ethereum(&mut self) -> Result<()> {
+        if self.provider.is_some() {
+            info!("WebSocket连接已存在，跳过重复连接");
+            return Ok(());
+        }
+
+        info!("开始连接到以太坊WebSocket...");
+        self.provider = Self::try_connect_to_ethereum().await;
+        
+        if self.provider.is_some() {
+            info!("成功连接到以太坊WebSocket");
+            Ok(())
+        } else {
+            Err(anyhow::anyhow!("无法连接到以太坊WebSocket"))
+        }
+    }
     
     /// 创建一个可管理的订阅，返回接收器和句柄
     pub fn subscribe(&mut self) -> (broadcast::Receiver<RawEventData>, SubscriptionHandle) {

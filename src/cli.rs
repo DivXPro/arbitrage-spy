@@ -329,8 +329,21 @@ impl CliApp {
         info!("  - 边数量: {}", edge_count);
         info!("  - 最后更新时间: {}", last_updated);
 
-        // 可以在这里添加更多的图分析功能
-        // 例如：寻找套利机会、分析流动性等
+        // 等待后台任务执行，观察链上数据更新过程
+        info!("等待后台任务执行链上数据更新...");
+        tokio::time::sleep(std::time::Duration::from_secs(15)).await;
+        
+        // 再次检查统计信息，看是否有更新
+        let (updated_token_count, updated_edge_count) = ArbitrageTrade::get_graph_stats(&graph);
+        let updated_last_updated = {
+            let graph_guard = graph.lock().unwrap();
+            graph_guard.last_updated
+        };
+        
+        info!("后台任务执行后的统计信息:");
+        info!("  - 代币数量: {}", updated_token_count);
+        info!("  - 边数量: {}", updated_edge_count);
+        info!("  - 最后更新时间: {}", updated_last_updated);
 
         Ok(())
     }

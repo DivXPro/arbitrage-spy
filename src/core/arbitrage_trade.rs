@@ -28,8 +28,14 @@ impl ArbitrageTrade {
     ) -> Result<()> {
         info!("开始从链上更新 {} 个交易对的数据...", pairs.len());
         
-        // 创建区块链客户端
-        let blockchain_client = Arc::new(BlockchainClient::ethereum().await?);
+        // 创建区块链客户端，使用重试机制避免DNS错误
+        let blockchain_client: Arc<BlockchainClient> = match Self::create_blockchain_client_with_retry().await {
+            Ok(client) => Arc::new(client),
+            Err(e) => {
+                warn!("无法创建区块链客户端，跳过链上数据更新: {}", e);
+                return Ok(());
+            }
+        };
         let v3_client = UniswapV3Client::new(blockchain_client.clone())?;
         
         let mut updated_count = 0;
@@ -116,8 +122,8 @@ impl ArbitrageTrade {
             None,  // limit
         )?;
         
-        // 创建EventListener实例
-        let event_listener = EventListener::new().await;
+        // 创建EventListener实例（不立即连接WebSocket以避免DNS错误）
+        let event_listener = EventListener::new_without_connection(10);
         
         if v3_pairs.is_empty() {
             warn!("数据库中没有找到V3交易对数据");
@@ -137,17 +143,15 @@ impl ArbitrageTrade {
             let graph_guard = graph.lock().unwrap();
             graph_guard.find_arbitrage_paths("USDT", 4, 0.01) // 最小盈利阈值1%
         };
-        
-        // 启动事件订阅
-        {
-            let mut graph_guard = graph.lock().unwrap();
-            graph_guard.start_subscription(Arc::clone(&graph))?;
-        }
 
-        // 启动后台任务更新链上数据，不阻塞主流程
+
+        // 延迟启动后台任务更新链上数据，避免与主线程的DNS解析冲突
         let graph_clone = Arc::clone(&graph);
         let pairs_clone = v3_pairs.clone();
         tokio::spawn(async move {
+            // 等待5秒，让主线程完成图构建
+            tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+            
             info!("开始后台更新链上交易对数据...");
             if let Err(e) = Self::update_pairs_from_blockchain(&pairs_clone, &graph_clone).await {
                 warn!("后台更新链上数据失败: {}", e);
@@ -166,6 +170,33 @@ impl ArbitrageTrade {
         info!("V3交易对图构建完成，代币数量: {}, 边数量: {}", token_count, edge_count);
         
         Ok(graph)
+    }
+
+    /// 创建区块链客户端，带重试机制避免DNS冲突
+    async fn create_blockchain_client_with_retry() -> Result<BlockchainClient> {
+        let mut last_error = None;
+        
+        // 重试3次，每次间隔2秒
+        for attempt in 1..=3 {
+            info!("尝试创建区块链客户端 (第{}/3次)...", attempt);
+            
+            match BlockchainClient::ethereum().await {
+                Ok(client) => {
+                    info!("成功创建区块链客户端");
+                    return Ok(client);
+                }
+                Err(e) => {
+                    warn!("第{}次创建区块链客户端失败: {}", attempt, e);
+                    last_error = Some(e);
+                    
+                    if attempt < 3 {
+                        tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+                    }
+                }
+            }
+        }
+        
+        Err(last_error.unwrap())
     }
 
     /// 获取图的统计信息
