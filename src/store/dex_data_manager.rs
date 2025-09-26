@@ -1,13 +1,12 @@
 use anyhow::Result;
 use ethers::prelude::*;
 use std::sync::Arc;
-use log::{info, warn, error};
+use log::{info, warn};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 
 use super::blockchain_client::{BlockchainClient, NetworkConfig};
-use super::uniswap_v2_client::{UniswapV2Client, V2PairInfo, V2FactoryInfo};
-use super::uniswap_v3_client::{UniswapV3Client, V3PoolInfo, V3FactoryInfo};
+use super::uniswap_v2_client::{UniswapV2Client};
+use super::uniswap_v3_client::{UniswapV3Client};
 
 /// DEX类型枚举
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
@@ -99,14 +98,6 @@ impl DexDataManager {
         Self::new(
             NetworkConfig::ethereum_mainnet(),
             vec![DexType::UniswapV2, DexType::UniswapV3, DexType::SushiSwap]
-        ).await
-    }
-
-    /// 创建BSC主网管理器
-    pub async fn bsc_all_dex() -> Result<Self> {
-        Self::new(
-            NetworkConfig::bsc_mainnet(),
-            vec![DexType::PancakeSwap]
         ).await
     }
 

@@ -299,7 +299,7 @@ impl EventListener {
         // 从环境变量读取WebSocket端点
         let wss_urls = match env::var("WSS_URLS") {
             Ok(urls_str) => {
-                urls_str.split(',').map(|s| s.trim().to_string()).collect::<Vec<String>>()
+                urls_str.split(';').map(|s| s.trim().to_string()).collect::<Vec<String>>()
             },
             Err(_) => {
                 warn!("未找到环境变量 WSS_URLS，使用默认WebSocket端点");
