@@ -3,6 +3,7 @@ use ethers::prelude::*;
 use ethers::abi::{Tokenize, Detokenize};
 use std::sync::Arc;
 use std::time::Duration;
+use std::env;
 use log::{info, warn, error};
 use serde::{Deserialize, Serialize};
 
@@ -18,12 +19,33 @@ pub struct NetworkConfig {
 impl NetworkConfig {
     /// 以太坊主网配置
     pub fn ethereum_mainnet() -> Self {
+        // 从环境变量读取 RPC_URL，支持多个地址用分号分割
+        let rpc_urls = match env::var("RPC_URL") {
+            Ok(urls_str) => {
+                // 按分号分割，过滤空字符串，并去除首尾空格
+                urls_str
+                    .split(';')
+                    .map(|url| url.trim().to_string())
+                    .filter(|url| !url.is_empty())
+                    .collect::<Vec<String>>()
+            }
+            Err(_) => {
+                // 如果环境变量不存在，使用默认值
+                vec!["https://eth-mainnet.g.alchemy.com/v2/your_key".to_string()]
+            }
+        };
+        
+        // 确保至少有一个 RPC URL
+        let final_urls = if rpc_urls.is_empty() {
+            vec!["https://eth-mainnet.g.alchemy.com/v2/your_key".to_string()]
+        } else {
+            rpc_urls
+        };
+        
         Self {
             name: "Ethereum Mainnet".to_string(),
             chain_id: 1,
-            rpc_urls: vec![
-                "https://mainnet.infura.io/v3/6c690e51fe514758853e86a096238250".to_string(),
-            ],
+            rpc_urls: final_urls,
             timeout_seconds: 30,
         }
     }
@@ -114,7 +136,7 @@ impl BlockchainClient {
     /// 测试RPC连接
     async fn test_rpc_connection(rpc_url: &str, config: &NetworkConfig) -> Result<Provider<Http>> {
         let provider = Provider::<Http>::try_from(rpc_url)?
-            .interval(Duration::from_millis(10u64));
+            .interval(Duration::from_millis(100u64));
 
         // 测试连接
         let block_number = tokio::time::timeout(

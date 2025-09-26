@@ -131,12 +131,19 @@ impl ArbitrageTrade {
         let exchange_graph = ExchangeGraph::new(Arc::new(Mutex::new(event_listener)), Some(&v3_pairs))?;
         let graph = Arc::new(Mutex::new(exchange_graph));
         
+
+        // 测试套利路径查找功能（使用合理的参数）
+        let paths = {
+            let graph_guard = graph.lock().unwrap();
+            graph_guard.find_arbitrage_paths("USDT", 4, 0.01) // 最小盈利阈值1%
+        };
+        
         // 启动事件订阅
         {
             let mut graph_guard = graph.lock().unwrap();
             graph_guard.start_subscription(Arc::clone(&graph))?;
         }
-        
+
         // 启动后台任务更新链上数据，不阻塞主流程
         let graph_clone = Arc::clone(&graph);
         let pairs_clone = v3_pairs.clone();
@@ -158,12 +165,6 @@ impl ArbitrageTrade {
         
         info!("V3交易对图构建完成，代币数量: {}, 边数量: {}", token_count, edge_count);
         
-        // 测试套利路径查找功能（使用合理的参数）
-        let paths = {
-            let graph_guard = graph.lock().unwrap();
-            graph_guard.find_arbitrage_paths("USDT", 4, 0.01) // 最小盈利阈值1%
-        };
-
         Ok(graph)
     }
 
