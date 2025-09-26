@@ -74,8 +74,6 @@ path = "src/lib.rs"
 name = "arbitrage-spy"
 path = "src/main.rs"
 
-
-
 [profile.release]
 opt-level = 3
 lto = true
@@ -85,7 +83,3 @@ panic = "abort"
 [profile.dev]
 opt-level = 0
 debug = true
-
-[[example]]
-name = "test_full_retry_logic"
-path = "test_full_retry_logic.rs"

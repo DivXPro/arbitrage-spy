@@ -1019,11 +1019,8 @@ impl ExchangeGraph {
             .map(|edge| &edge.gas_cost)
             .sum();
 
-        // 计算总的交易费用
-        let total_fee_cost = self.calculate_total_fees(path, &initial_amount);
-
-        // 计算净盈利（扣除Gas和手续费）
-        let net_profit = &profit - &total_gas_cost - &total_fee_cost;
+        // 计算净盈利（扣除Gas）
+        let net_profit = &profit - &total_gas_cost;
         let net_profit_rate = net_profit.to_f64().unwrap_or(0.0);
 
         // 检查净盈利是否仍然满足阈值
@@ -1043,7 +1040,7 @@ impl ExchangeGraph {
             net_profit: net_profit.clone(),
             net_profit_rate,
             total_gas_cost: total_gas_cost.clone(),
-            total_fee_cost: total_fee_cost.clone(),
+            total_fee_cost: BigDecimal::zero(), // Fee is already deducted in calculate_amount_after_trade
             risk_score,
             estimated_execution_time: self.estimate_execution_time(path),
         })
@@ -1055,11 +1052,11 @@ impl ExchangeGraph {
         let mut output_amount = input_amount * &edge.exchange_rate;
 
         // 扣除交易手续费
-        let fee_amount = &output_amount * BigDecimal::from_f64(edge.fee_percentage / 100.0).unwrap_or_default();
+        let fee_amount = &output_amount * BigDecimal::from_f64(edge.fee_percentage).unwrap_or_default();
         output_amount = output_amount - fee_amount;
 
         // 考虑滑点影响
-        let slippage_impact = &output_amount * BigDecimal::from_f64(edge.slippage / 100.0).unwrap_or_default();
+        let slippage_impact = &output_amount * BigDecimal::from_f64(edge.slippage).unwrap_or_default();
         output_amount = output_amount - slippage_impact;
 
         // 确保金额不为负数
@@ -1070,20 +1067,7 @@ impl ExchangeGraph {
         }
     }
 
-    /// 计算路径的总手续费
-    fn calculate_total_fees(&self, path: &[ExchangeEdge], initial_amount: &BigDecimal) -> BigDecimal {
-        let mut current_amount = initial_amount.clone();
-        let mut total_fees = BigDecimal::zero();
 
-        for edge in path {
-            let trade_amount = &current_amount * &edge.exchange_rate;
-            let fee = &trade_amount * BigDecimal::from_f64(edge.fee_percentage / 100.0).unwrap_or_default();
-            total_fees = total_fees + fee;
-            current_amount = self.calculate_amount_after_trade(&current_amount, edge);
-        }
-
-        total_fees
-    }
 
     /// 计算路径风险评分（0-100，越低越好）
     fn calculate_path_risk(&self, path: &[ExchangeEdge]) -> f64 {
