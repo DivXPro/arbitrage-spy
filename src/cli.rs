@@ -370,7 +370,7 @@ impl CliApp {
         info!("📊 图中共有 {} 个代币", tokens.len());
         
         // 选择前几个代币进行套利路径搜索（避免搜索时间过长）
-        let search_tokens: Vec<String> = vec![String::from("USDT")];
+        let search_tokens: Vec<String> = vec![String::from("0xdac17f958d2ee523a2206206994597c13d831ec7")];
 
         info!("🎯 将对以下代币进行套利路径搜索: {:?}", search_tokens);
         
