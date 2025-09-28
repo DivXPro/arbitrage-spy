@@ -10,8 +10,10 @@ use crate::price_calculator::PriceCalculator;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ExchangeEdge {
     pub pair_id: String,            // 交易对唯一标识（引用Graph中的PairData）
-    pub from_token: String,         // 源代币符号
-    pub to_token: String,           // 目标代币符号
+    pub from_token_id: String,      // 源代币ID（用于图构建）
+    pub to_token_id: String,        // 目标代币ID（用于图构建）
+    pub from_token: String,         // 源代币符号（用于显示）
+    pub to_token: String,           // 目标代币符号（用于显示）
     pub dex: String,                // 去中心化交易所名称
     pub exchange_rate: BigDecimal,  // 汇率 (to_token/from_token)
     pub liquidity: BigDecimal,      // 流动性
@@ -25,6 +27,8 @@ impl ExchangeEdge {
     /// 
     /// # 参数
     /// * `pair` - 交易对数据
+    /// * `from_token_id` - 源代币ID
+    /// * `to_token_id` - 目标代币ID
     /// * `from_token` - 源代币符号
     /// * `to_token` - 目标代币符号
     /// * `exchange_rate` - 汇率 (to_token/from_token)
@@ -33,6 +37,8 @@ impl ExchangeEdge {
     /// * `Result<ExchangeEdge>` - 创建的交换边或错误
     pub fn from_pair_data(
         pair: &PairData,
+        from_token_id: String,
+        to_token_id: String,
         from_token: String,
         to_token: String,
         exchange_rate: BigDecimal,
@@ -65,6 +71,8 @@ impl ExchangeEdge {
         
         Ok(ExchangeEdge {
             pair_id: pair.id.clone(),
+            from_token_id,
+            to_token_id,
             from_token,
             to_token,
             dex: pair.dex.clone(),
@@ -98,6 +106,8 @@ impl ExchangeEdge {
         // 创建 token0 -> token1 的边
         let edge_0_to_1 = Self::from_pair_data(
             pair,
+            pair.token0.id.clone(),
+            pair.token1.id.clone(),
             pair.token0.symbol.clone(),
             pair.token1.symbol.clone(),
             price_1_per_0,
@@ -106,6 +116,8 @@ impl ExchangeEdge {
         // 创建 token1 -> token0 的边
         let edge_1_to_0 = Self::from_pair_data(
             pair,
+            pair.token1.id.clone(),
+            pair.token0.id.clone(),
             pair.token1.symbol.clone(),
             pair.token0.symbol.clone(),
             price_0_per_1,

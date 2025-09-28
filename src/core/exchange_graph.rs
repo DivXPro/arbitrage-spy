@@ -13,6 +13,7 @@ use crate::config::protocol_types;
 use crate::event_listener::{EventListener, RawEventData, SubscriptionId};
 use super::exchange_edge::ExchangeEdge;
 use super::arbitrage_path::ArbitragePath;
+use super::trade_calculator::TradeCalculator;
 
 /// 价格图，用于存储所有代币间的交换关系
 pub struct ExchangeGraph {
@@ -20,8 +21,8 @@ pub struct ExchangeGraph {
     pub event_listener: Arc<Mutex<EventListener>>,
     pub pairs: HashMap<String, Arc<PairData>>,              // pair_id -> PairData
     /// 邻接表：token -> [(to_token, edge)]
-    pub adjacency_list: HashMap<String, Vec<ExchangeEdge>>, // 代币交换关系的邻接表
-    pub tokens: HashSet<String>,                             // 所有代币符号的集合
+    pub adjacency_list: HashMap<String, Vec<ExchangeEdge>>, // 代币交换关系的邻接表 (token_id -> edges)
+    pub tokens: HashSet<String>,                             // 所有代币ID的集合
     pub last_updated: DateTime<Utc>,         // 最后更新时间
     /// 跟踪已更新的 pair 集合
     pub pair_updated_flags: HashSet<String>,                // 已更新的 pair_id 集合
@@ -70,11 +71,11 @@ impl ExchangeGraph {
 
 
     pub fn add_edge(&mut self, edge: ExchangeEdge) {
-        self.tokens.insert(edge.from_token.clone());
-        self.tokens.insert(edge.to_token.clone());
+        self.tokens.insert(edge.from_token_id.clone());
+        self.tokens.insert(edge.to_token_id.clone());
         
         self.adjacency_list
-            .entry(edge.from_token.clone())
+            .entry(edge.from_token_id.clone())
             .or_insert_with(Vec::new)
             .push(edge);
     }
@@ -123,14 +124,14 @@ impl ExchangeGraph {
     }
 
     /// 获取指定代币的所有出边
-    pub fn get_edges_from(&self, token: &str) -> Option<&Vec<ExchangeEdge>> {
-        self.adjacency_list.get(token)
+    pub fn get_edges_from(&self, token_id: &str) -> Option<&Vec<ExchangeEdge>> {
+        self.adjacency_list.get(token_id)
     }
 
     /// 检查两个代币之间是否存在直接连接
-    pub fn has_direct_path(&self, from_token: &str, to_token: &str) -> bool {
-        if let Some(edges) = self.adjacency_list.get(from_token) {
-            edges.iter().any(|edge| edge.to_token == to_token)
+    pub fn has_direct_path(&self, from_token_id: &str, to_token_id: &str) -> bool {
+        if let Some(edges) = self.adjacency_list.get(from_token_id) {
+            edges.iter().any(|edge| edge.to_token_id == to_token_id)
         } else {
             false
         }
@@ -314,6 +315,8 @@ impl ExchangeGraph {
         if !updated_forward {
             let forward_edge = ExchangeEdge {
                 pair_id: pair.id.clone(),
+                from_token_id: pair.token0.id.clone(),
+                to_token_id: pair.token1.id.clone(),
                 from_token: pair.token0.symbol.clone(),
                 to_token: pair.token1.symbol.clone(),
                 dex: pair.dex.clone(),
@@ -329,6 +332,8 @@ impl ExchangeGraph {
         if !updated_reverse {
             let reverse_edge = ExchangeEdge {
                 pair_id: pair.id.clone(),
+                from_token_id: pair.token1.id.clone(),
+                to_token_id: pair.token0.id.clone(),
                 from_token: pair.token1.symbol.clone(),
                 to_token: pair.token0.symbol.clone(),
                 dex: pair.dex.clone(),
@@ -356,15 +361,15 @@ impl ExchangeGraph {
     /// 返回true如果找到并更新了边，false如果边不存在
     fn update_existing_edge(
         &mut self, 
-        from_token: &str, 
-        to_token: &str, 
+        from_token_id: &str, 
+        to_token_id: &str, 
         pair_id: &str,
         new_rate: BigDecimal,
         new_liquidity: BigDecimal
     ) -> bool {
-        if let Some(edges) = self.adjacency_list.get_mut(from_token) {
+        if let Some(edges) = self.adjacency_list.get_mut(from_token_id) {
             for edge in edges.iter_mut() {
-                if edge.to_token == to_token && edge.pair_id == pair_id {
+                if edge.to_token_id == to_token_id && edge.pair_id == pair_id {
                     // 直接更新边的数据
                     edge.exchange_rate = new_rate;
                     edge.liquidity = new_liquidity.clone();
@@ -373,7 +378,7 @@ impl ExchangeGraph {
                     edge.fee_percentage = Self::get_dex_fee_percentage(&edge.dex);
                     
                     debug!("直接更新边: {} -> {} ({}), 新汇率: {}", 
-                           from_token, to_token, edge.dex, edge.exchange_rate);
+                           edge.from_token, edge.to_token, edge.dex, edge.exchange_rate);
                     return true;
                 }
             }
@@ -864,7 +869,7 @@ impl ExchangeGraph {
     /// * `Vec<ArbitragePath>` - 找到的套利路径列表，按盈利率排序
     pub fn find_arbitrage_paths(
         &self,
-        start_token: &str,
+        start_token_id: &str,
         max_depth: usize,
         min_profit_threshold: f64,
     ) -> Vec<ArbitragePath> {
@@ -873,8 +878,8 @@ impl ExchangeGraph {
             return Vec::new();
         }
 
-        if !self.tokens.contains(start_token) {
-            warn!("起始代币 {} 不存在于图中", start_token);
+        if !self.tokens.contains(start_token_id) {
+            warn!("起始代币 {} 不存在于图中", start_token_id);
             return Vec::new();
         }
 
@@ -883,14 +888,14 @@ impl ExchangeGraph {
         let mut current_path = Vec::new();
 
         info!("开始寻找从 {} 出发的套利路径，最大深度: {}, 最小盈利阈值: {}%", 
-              start_token, max_depth, min_profit_threshold * 100.0);
+              start_token_id, max_depth, min_profit_threshold * 100.0);
         
         println!("🔍 正在搜索套利路径...");
 
         // 使用深度优先搜索寻找套利路径
         self.dfs_arbitrage_paths(
-            start_token,
-            start_token,
+            start_token_id,
+            start_token_id,
             BigDecimal::from(1), // 初始金额为1
             max_depth,
             min_profit_threshold,
@@ -910,8 +915,8 @@ impl ExchangeGraph {
     /// 深度优先搜索套利路径
     fn dfs_arbitrage_paths(
         &self,
-        current_token: &str,
-        start_token: &str,
+        current_token_id: &str,
+        start_token_id: &str,
         current_amount: BigDecimal,
         remaining_depth: usize,
         min_profit_threshold: f64,
@@ -920,12 +925,12 @@ impl ExchangeGraph {
         arbitrage_paths: &mut Vec<ArbitragePath>,
     ) {
         // 如果已经访问过当前代币（除了起始代币），跳过以避免无限循环
-        if visited.contains(current_token) && current_token != start_token {
+        if visited.contains(current_token_id) && current_token_id != start_token_id {
             return;
         }
 
         // 如果路径长度达到3且回到起始代币，检查是否有套利机会
-        if current_path.len() >= 2 && current_token == start_token {
+        if current_path.len() >= 2 && current_token_id == start_token_id {
             if let Some(arbitrage_path) = self.evaluate_arbitrage_path(
                 current_path,
                 &current_amount,
@@ -958,12 +963,12 @@ impl ExchangeGraph {
         }
 
         // 标记当前代币为已访问
-        if current_token != start_token {
-            visited.insert(current_token.to_string());
+        if current_token_id != start_token_id {
+            visited.insert(current_token_id.to_string());
         }
 
         // 探索从当前代币出发的所有边
-        if let Some(edges) = self.adjacency_list.get(current_token) {
+        if let Some(edges) = self.adjacency_list.get(current_token_id) {
             for edge in edges {
                 // 计算通过这条边后的金额
                 let next_amount = self.calculate_amount_after_trade(&current_amount, edge);
@@ -973,8 +978,8 @@ impl ExchangeGraph {
 
                 // 递归搜索
                 self.dfs_arbitrage_paths(
-                    &edge.to_token,
-                    start_token,
+                    &edge.to_token_id,
+                    start_token_id,
                     next_amount,
                     remaining_depth - 1,
                     min_profit_threshold,
@@ -989,8 +994,8 @@ impl ExchangeGraph {
         }
 
         // 回溯：移除访问标记
-        if current_token != start_token {
-            visited.remove(current_token);
+        if current_token_id != start_token_id {
+            visited.remove(current_token_id);
         }
     }
 
@@ -1048,23 +1053,8 @@ impl ExchangeGraph {
 
     /// 计算交易后的金额（考虑汇率、滑点和手续费）
     fn calculate_amount_after_trade(&self, input_amount: &BigDecimal, edge: &ExchangeEdge) -> BigDecimal {
-        // 基础汇率计算
-        let mut output_amount = input_amount * &edge.exchange_rate;
-
-        // 扣除交易手续费
-        let fee_amount = &output_amount * BigDecimal::from_f64(edge.fee_percentage).unwrap_or_default();
-        output_amount = output_amount - fee_amount;
-
-        // 考虑滑点影响
-        let slippage_impact = &output_amount * BigDecimal::from_f64(edge.slippage).unwrap_or_default();
-        output_amount = output_amount - slippage_impact;
-
-        // 确保金额不为负数
-        if output_amount < BigDecimal::zero() {
-            BigDecimal::zero()
-        } else {
-            output_amount
-        }
+        // 使用统一的交易计算器
+        TradeCalculator::calculate_trade_output(input_amount, edge)
     }
 
 
@@ -1127,12 +1117,12 @@ impl ExchangeGraph {
     /// 寻找最优套利路径（限制返回数量）
     pub fn find_best_arbitrage_paths(
         &self,
-        start_token: &str,
+        start_token_id: &str,
         max_depth: usize,
         min_profit_threshold: f64,
         max_results: usize,
     ) -> Vec<ArbitragePath> {
-        let mut paths = self.find_arbitrage_paths(start_token, max_depth, min_profit_threshold);
+        let mut paths = self.find_arbitrage_paths(start_token_id, max_depth, min_profit_threshold);
         
         // 按综合评分排序（考虑盈利率和风险）
         paths.sort_by(|a, b| {
@@ -1178,13 +1168,13 @@ impl ExchangeGraph {
     /// 高级套利路径搜索（支持多种优化策略）
     pub fn find_optimized_arbitrage_paths(
         &self,
-        start_token: &str,
+        start_token_id: &str,
         max_depth: usize,
         min_profit_threshold: f64,
         optimization_strategy: OptimizationStrategy,
         max_results: usize,
     ) -> Vec<ArbitragePath> {
-        let mut paths = self.find_arbitrage_paths(start_token, max_depth, min_profit_threshold);
+        let mut paths = self.find_arbitrage_paths(start_token_id, max_depth, min_profit_threshold);
         
         // 应用优化策略排序
         match optimization_strategy {
@@ -1247,12 +1237,12 @@ impl ExchangeGraph {
     /// 寻找跨DEX套利机会（专门寻找涉及不同DEX的路径）
     pub fn find_cross_dex_arbitrage(
         &self,
-        start_token: &str,
+        start_token_id: &str,
         max_depth: usize,
         min_profit_threshold: f64,
         max_results: usize,
     ) -> Vec<ArbitragePath> {
-        let all_paths = self.find_arbitrage_paths(start_token, max_depth, min_profit_threshold);
+        let all_paths = self.find_arbitrage_paths(start_token_id, max_depth, min_profit_threshold);
         
         // 过滤出跨DEX的路径
         let cross_dex_paths: Vec<ArbitragePath> = all_paths.into_iter()
@@ -1274,12 +1264,12 @@ impl ExchangeGraph {
     /// 寻找三角套利机会（3步路径）
     pub fn find_triangular_arbitrage(
         &self,
-        start_token: &str,
+        start_token_id: &str,
         min_profit_threshold: f64,
         max_results: usize,
     ) -> Vec<ArbitragePath> {
         self.find_optimized_arbitrage_paths(
-            start_token,
+            start_token_id,
             3, // 固定为3步
             min_profit_threshold,
             OptimizationStrategy::MaxProfit,
@@ -1388,8 +1378,8 @@ impl ExchangeGraph {
     }
 
     /// 获取市场深度分析
-    pub fn get_market_depth_analysis(&self, token: &str) -> Option<MarketDepthAnalysis> {
-        if let Some(edges) = self.adjacency_list.get(token) {
+    pub fn get_market_depth_analysis(&self, token_id: &str) -> Option<MarketDepthAnalysis> {
+        if let Some(edges) = self.adjacency_list.get(token_id) {
             let total_liquidity: f64 = edges.iter()
                 .map(|edge| edge.liquidity.to_f64().unwrap_or(0.0))
                 .sum();
@@ -1413,7 +1403,7 @@ impl ExchangeGraph {
                 .collect();
 
             Some(MarketDepthAnalysis {
-                token: token.to_string(),
+                token: token_id.to_string(),
                 total_liquidity,
                 avg_liquidity,
                 max_liquidity,

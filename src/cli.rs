@@ -345,6 +345,77 @@ impl CliApp {
         info!("  - 边数量: {}", updated_edge_count);
         info!("  - 最后更新时间: {}", updated_last_updated);
 
+        // 执行套利路径查找（不要求利润率，路径节点在4个以内）
+        info!("开始执行套利路径查找...");
+        self.find_arbitrage_paths_in_graph(&graph).await?;
+
+        Ok(())
+    }
+
+    /// 在交换图中查找套利路径
+    async fn find_arbitrage_paths_in_graph(&self, graph: &std::sync::Arc<std::sync::Mutex<crate::core::exchange_graph::ExchangeGraph>>) -> Result<()> {
+        info!("🔍 开始套利路径搜索分析...");
+        
+        // 获取图中的代币列表
+        let tokens: Vec<String> = {
+            let graph_guard = graph.lock().unwrap();
+            graph_guard.tokens.iter().cloned().collect()
+        };
+        
+        if tokens.is_empty() {
+            info!("⚠️  图中没有代币，跳过套利路径搜索");
+            return Ok(());
+        }
+        
+        info!("📊 图中共有 {} 个代币", tokens.len());
+        
+        // 选择前几个代币进行套利路径搜索（避免搜索时间过长）
+        let search_tokens: Vec<String> = vec![String::from("USDT")];
+
+        info!("🎯 将对以下代币进行套利路径搜索: {:?}", search_tokens);
+        
+        let mut total_paths_found = 0;
+        let max_depth = 4; // 路径节点在4个以内
+        let min_profit_threshold = -100.0; // 不要求利润率（使用负数阈值）
+        
+        for token in &search_tokens {
+            info!("🔍 搜索从 {} 开始的套利路径...", token);
+            
+            let paths = {
+                let graph_guard = graph.lock().unwrap();
+                graph_guard.find_arbitrage_paths(token, max_depth, min_profit_threshold)
+            };
+            
+            let path_count = paths.len();
+            total_paths_found += path_count;
+            
+            info!("📈 从 {} 开始找到 {} 条路径", token, path_count);
+            
+            // 显示前3条最佳路径的详细信息
+            for (i, path) in paths.iter().take(3).enumerate() {
+                info!("  路径 {}: {} (净利润率: {:.4}%)", 
+                     i + 1, 
+                     path.format_path_chain(), 
+                     path.net_profit_rate * 100.0);
+            }
+            
+            if path_count > 3 {
+                info!("  ... 还有 {} 条其他路径", path_count - 3);
+            }
+            
+            // 添加短暂延迟，避免过度占用资源
+            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+        }
+        
+        info!("✅ 套利路径搜索完成！");
+        info!("📊 总计找到 {} 条套利路径", total_paths_found);
+        
+        if total_paths_found > 0 {
+            info!("💡 提示: 这些路径包括盈利和亏损的所有闭环路径");
+        } else {
+            info!("⚠️  未找到任何套利路径，可能是图中缺少足够的连接");
+        }
+        
         Ok(())
     }
 }

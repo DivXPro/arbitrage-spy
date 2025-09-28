@@ -1,9 +1,8 @@
-use std::collections::HashSet;
-use bigdecimal::{BigDecimal, Zero, FromPrimitive, ToPrimitive};
+use bigdecimal::{BigDecimal, ToPrimitive};
 use anyhow::{Result, anyhow};
 use serde::{Deserialize, Serialize};
-use log::{info, warn};
 use super::exchange_edge::ExchangeEdge;
+use super::trade_calculator::TradeCalculator;
 
 /// 套利路径结构体
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -24,41 +23,8 @@ pub struct ArbitragePath {
 impl ArbitragePath {
     /// 验证套利路径的有效性
     pub fn validate(&self) -> Result<()> {
-        if self.edges.is_empty() {
-            return Err(anyhow!("套利路径不能为空"));
-        }
-
-        if self.edges.len() < 2 {
-            return Err(anyhow!("套利路径至少需要2条边"));
-        }
-
-        // 检查路径是否形成闭环
-        let start_token = &self.edges[0].from_token;
-        let end_token = &self.edges.last().unwrap().to_token;
-        if start_token != end_token {
-            return Err(anyhow!("套利路径必须形成闭环，起始代币: {}, 结束代币: {}", start_token, end_token));
-        }
-
-        // 检查路径连续性
-        for i in 0..self.edges.len() - 1 {
-            if self.edges[i].to_token != self.edges[i + 1].from_token {
-                return Err(anyhow!(
-                    "路径在第{}步不连续: {} -> {} 与 {} -> {}",
-                    i + 1,
-                    self.edges[i].from_token,
-                    self.edges[i].to_token,
-                    self.edges[i + 1].from_token,
-                    self.edges[i + 1].to_token
-                ));
-            }
-        }
-
-        // 验证每条边的有效性
-        for (i, edge) in self.edges.iter().enumerate() {
-            if let Err(e) = edge.validate() {
-                return Err(anyhow!("路径第{}条边验证失败: {}", i + 1, e));
-            }
-        }
+        // 使用统一的验证逻辑
+        TradeCalculator::validate_path(&self.edges)?;
 
         // 检查盈利率是否合理
         if self.profit_rate < -1.0 || self.profit_rate > 10.0 {
@@ -72,61 +38,25 @@ impl ArbitragePath {
     pub fn recalculate_metrics(&mut self, initial_amount: &BigDecimal) -> Result<()> {
         self.initial_amount = initial_amount.clone();
         
-        // 重新计算最终金额
-        let mut current_amount = initial_amount.clone();
-        for edge in &self.edges {
-            current_amount = self.calculate_amount_after_trade(&current_amount, edge);
-        }
-        self.final_amount = current_amount;
+        // 使用统一计算器计算路径盈利指标
+        let (final_amount, profit, profit_rate) = TradeCalculator::calculate_path_profit(initial_amount, &self.edges);
+        self.final_amount = final_amount;
+        self.profit = profit;
+        self.profit_rate = profit_rate;
 
-        // 重新计算盈利
-        self.profit = &self.final_amount - &self.initial_amount;
-        self.profit_rate = self.profit.to_f64().unwrap_or(0.0) / self.initial_amount.to_f64().unwrap_or(1.0);
+        // 计算成本
+        self.total_gas_cost = TradeCalculator::calculate_total_gas_cost(&self.edges);
+        self.total_fee_cost = TradeCalculator::calculate_total_fees(initial_amount, &self.edges);
 
-        // 重新计算成本
-        self.total_gas_cost = self.edges.iter().map(|edge| &edge.gas_cost).sum();
-        self.total_fee_cost = self.calculate_total_fees(&self.initial_amount);
-
-        // 重新计算净盈利
-        self.net_profit = &self.profit - &self.total_gas_cost - &self.total_fee_cost;
-        self.net_profit_rate = self.net_profit.to_f64().unwrap_or(0.0) / self.initial_amount.to_f64().unwrap_or(1.0);
+        // 计算净盈利
+        let (net_profit, net_profit_rate) = TradeCalculator::calculate_net_profit(initial_amount, &self.edges);
+        self.net_profit = net_profit;
+        self.net_profit_rate = net_profit_rate;
 
         Ok(())
     }
 
-    /// 计算交易后的金额
-    fn calculate_amount_after_trade(&self, input_amount: &BigDecimal, edge: &ExchangeEdge) -> BigDecimal {
-        // 计算交易费用
-        let fee_rate = BigDecimal::from_f64(edge.fee_percentage / 100.0).unwrap_or_default();
-        let fee_amount = input_amount * &fee_rate;
-        let amount_after_fee = input_amount - &fee_amount;
 
-        // 应用汇率
-        let output_amount = &amount_after_fee * &edge.exchange_rate;
-
-        // 考虑滑点影响
-        if edge.slippage > 0.0 {
-            let slippage_factor = BigDecimal::from_f64(1.0 - edge.slippage / 100.0).unwrap_or_default();
-            output_amount * slippage_factor
-        } else {
-            output_amount
-        }
-    }
-
-    /// 计算总交易费用
-    fn calculate_total_fees(&self, initial_amount: &BigDecimal) -> BigDecimal {
-        let mut current_amount = initial_amount.clone();
-        let mut total_fees = BigDecimal::from(0);
-
-        for edge in &self.edges {
-            let fee_rate = BigDecimal::from_f64(edge.fee_percentage / 100.0).unwrap_or_default();
-            let fee_amount = &current_amount * &fee_rate;
-            total_fees += &fee_amount;
-            current_amount = self.calculate_amount_after_trade(&current_amount, edge);
-        }
-
-        total_fees
-    }
 
     /// 获取路径摘要信息
     pub fn get_summary(&self) -> String {
@@ -158,7 +88,7 @@ impl ArbitragePath {
 
         let mut chain = vec![self.edges[0].from_token.clone()];
         for edge in &self.edges {
-            chain.push(format!("{}({})", edge.to_token, edge.dex));
+            chain.push(format!("{}({})", edge.to_token, edge.pair_id));
         }
         chain.join(" -> ")
     }

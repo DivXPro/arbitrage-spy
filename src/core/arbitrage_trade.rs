@@ -136,14 +136,6 @@ impl ArbitrageTrade {
         // 使用ExchangeGraph的new构造函数创建图，直接传入pairs参数
         let exchange_graph = ExchangeGraph::new(Arc::new(Mutex::new(event_listener)), Some(&v3_pairs))?;
         let graph = Arc::new(Mutex::new(exchange_graph));
-        
-
-        // 测试套利路径查找功能（使用合理的参数）
-        let paths = {
-            let graph_guard = graph.lock().unwrap();
-            graph_guard.find_arbitrage_paths("USDT", 4, 0.01) // 最小盈利阈值1%
-        };
-
 
         // 延迟启动后台任务更新链上数据，避免与主线程的DNS解析冲突
         let graph_clone = Arc::clone(&graph);

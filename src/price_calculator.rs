@@ -174,6 +174,27 @@ impl PriceCalculator {
         
         let abs_diff = decimals_diff.abs() as u32;
         
+        // 限制极端的小数位差异，防止异常大的价格调整
+        const MAX_DECIMAL_DIFF: u32 = 18;
+        if abs_diff > MAX_DECIMAL_DIFF {
+            log::warn!(
+                "极端小数位差异被限制: {} -> {} (差异: {}, 限制为: {})",
+                token0_decimals, token1_decimals, abs_diff, MAX_DECIMAL_DIFF
+            );
+            // 使用限制后的差异
+            let limited_diff = MAX_DECIMAL_DIFF;
+            let adjustment = BigDecimal::from_u64(10_u64.pow(limited_diff))
+                .unwrap_or_else(|| BigDecimal::from(1));
+            
+            let result = if decimals_diff > 0 {
+                &raw_price * &adjustment
+            } else {
+                &raw_price / &adjustment
+            };
+            
+            return result.normalized();
+        }
+        
         // 安全地计算 10^abs_diff，避免整数溢出
         let adjustment = if abs_diff <= 18 {
             // 对于常见的小数位数差异，使用预计算的值
@@ -190,10 +211,30 @@ impl PriceCalculator {
         };
         
         let result = if decimals_diff > 0 {
-            raw_price * adjustment
+            &raw_price * &adjustment
         } else {
-            raw_price / adjustment
+            &raw_price / &adjustment
         };
+        
+        // 对调整后的价格进行合理性检查
+        let min_price = BigDecimal::from_str("1e-12").unwrap_or_else(|_| BigDecimal::from_str("0.000000000001").unwrap());
+        let max_price = BigDecimal::from_str("1e12").unwrap_or_else(|_| BigDecimal::from_str("1000000000000").unwrap());
+        
+        if result < min_price {
+            log::warn!(
+                "调整后价格过小，使用最小值: {} -> {} (原始: {}, token0_decimals: {}, token1_decimals: {})",
+                result, min_price, raw_price, token0_decimals, token1_decimals
+            );
+            return min_price;
+        }
+        
+        if result > max_price {
+            log::warn!(
+                "调整后价格过大，使用最大值: {} -> {} (原始: {}, token0_decimals: {}, token1_decimals: {})",
+                result, max_price, raw_price, token0_decimals, token1_decimals
+            );
+            return max_price;
+        }
         
         // 规范化精度以保持向后兼容性
         // 移除尾随的零，使输出格式与原方法一致

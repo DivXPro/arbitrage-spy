@@ -6,6 +6,7 @@ use log::{info, warn, debug};
 use crate::core::types::{Price, TokenPair};
 use crate::core::exchange_edge::ExchangeEdge;
 use crate::core::exchange_graph::ExchangeGraph;
+use crate::core::trade_calculator::TradeCalculator;
 
 #[cfg(test)]
 use std::str::FromStr;
@@ -292,17 +293,8 @@ impl ArbitrageChainFinder {
     }
 
     fn calculate_amount_after_swap(&self, amount_in: &BigDecimal, edge: &ExchangeEdge) -> Result<BigDecimal> {
-        // 应用交易费用
-        let amount_after_fee = amount_in * (BigDecimal::from(1) - BigDecimal::from_f64(edge.fee_percentage).unwrap_or_default());
-        
-        // 应用汇率
-        let amount_before_slippage = amount_after_fee * &edge.exchange_rate;
-        
-        // 应用滑点
-        let slippage_factor = BigDecimal::from(1) - BigDecimal::from_f64(edge.slippage).unwrap_or_default();
-        let amount_out = amount_before_slippage * slippage_factor;
-        
-        Ok(amount_out)
+        // 使用统一的交易计算器
+        Ok(TradeCalculator::calculate_trade_output(amount_in, edge))
     }
 
     fn calculate_cumulative_gas(&self, current_path: &[ArbitrageHop], additional_gas: &BigDecimal) -> BigDecimal {
@@ -317,7 +309,9 @@ impl ArbitrageChainFinder {
             .map(|hop| &hop.cumulative_fees)
             .fold(BigDecimal::from(0), |acc, fees| acc + fees);
         
-        let current_fee = amount_in * BigDecimal::from_f64(edge.fee_percentage).unwrap_or_default();
+        // 使用正确的费用计算：fee_percentage 已经是小数形式（如 0.003 表示 0.3%）
+        let output_before_fee = amount_in * &edge.exchange_rate;
+        let current_fee = &output_before_fee * BigDecimal::from_f64(edge.fee_percentage).unwrap_or_default();
         current_fees + current_fee
     }
 
