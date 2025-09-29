@@ -74,6 +74,14 @@ path = "src/lib.rs"
 name = "arbitrage-spy"
 path = "src/main.rs"
 
+[[example]]
+name = "gas_cost_example"
+path = "examples/gas_cost_example.rs"
+
+[[example]]
+name = "test_no_defaults"
+path = "examples/test_no_defaults.rs"
+
 [profile.release]
 opt-level = 3
 lto = true

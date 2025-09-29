@@ -1,6 +1,7 @@
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::env;
 
 // 协议类型常量
 pub mod protocol_types {
@@ -23,6 +24,7 @@ pub struct Config {
     pub dex_configs: HashMap<String, DexConfig>,
     pub monitoring: MonitoringConfig,
     pub arbitrage: ArbitrageConfig,
+    pub gas_config: GasConfig,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -52,8 +54,20 @@ pub struct ArbitrageConfig {
     pub tokens_to_monitor: Vec<String>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GasConfig {
+    pub uniswap_v2_gas_units: u64,
+    pub uniswap_v3_gas_units: u64,
+    pub sushiswap_gas_units: u64,
+    pub pancakeswap_gas_units: u64,
+    pub balancer_gas_units: u64,
+    pub curve_gas_units: u64,
+}
+
 impl Config {
     pub fn load() -> Result<Self> {
+        // 加载.env文件
+        dotenv::dotenv().ok();
         // 默认配置
         let mut dex_configs = HashMap::new();
         
@@ -135,6 +149,32 @@ impl Config {
                     "0x6B175474E89094C44Da98b954EedeAC495271d0F".to_string(), // DAI
                 ],
             },
+            gas_config: GasConfig {
+                uniswap_v2_gas_units: env::var("UNISWAP_V2_GAS_UNITS")
+                    .unwrap_or_else(|_| "150000".to_string())
+                    .parse()
+                    .unwrap_or(150000),
+                uniswap_v3_gas_units: env::var("UNISWAP_V3_GAS_UNITS")
+                    .unwrap_or_else(|_| "180000".to_string())
+                    .parse()
+                    .unwrap_or(180000),
+                sushiswap_gas_units: env::var("SUSHISWAP_GAS_UNITS")
+                    .unwrap_or_else(|_| "150000".to_string())
+                    .parse()
+                    .unwrap_or(150000),
+                pancakeswap_gas_units: env::var("PANCAKESWAP_GAS_UNITS")
+                    .unwrap_or_else(|_| "150000".to_string())
+                    .parse()
+                    .unwrap_or(150000),
+                balancer_gas_units: env::var("BALANCER_GAS_UNITS")
+                    .unwrap_or_else(|_| "200000".to_string())
+                    .parse()
+                    .unwrap_or(200000),
+                curve_gas_units: env::var("CURVE_GAS_UNITS")
+                    .unwrap_or_else(|_| "220000".to_string())
+                    .parse()
+                    .unwrap_or(220000),
+            },
         })
     }
     
@@ -143,5 +183,20 @@ impl Config {
             .values()
             .filter(|config| config.enabled)
             .collect()
+    }
+}
+
+impl GasConfig {
+    /// 根据DEX名称获取Gas单位
+    pub fn get_gas_units(&self, dex_name: &str) -> u64 {
+        match dex_name.to_lowercase().as_str() {
+            "uniswap_v2" => self.uniswap_v2_gas_units,
+            "uniswap_v3" => self.uniswap_v3_gas_units,
+            "sushiswap" => self.sushiswap_gas_units,
+            "pancakeswap" => self.pancakeswap_gas_units,
+            "balancer" => self.balancer_gas_units,
+            "curve" => self.curve_gas_units,
+            _ => self.uniswap_v2_gas_units, // 默认使用Uniswap V2的值
+        }
     }
 }

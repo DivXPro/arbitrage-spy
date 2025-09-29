@@ -896,7 +896,7 @@ impl ExchangeGraph {
         self.dfs_arbitrage_paths(
             start_token_id,
             start_token_id,
-            BigDecimal::from(1), // 初始金额为1
+            &BigDecimal::from(1000), // 初始金额为1000
             max_depth,
             min_profit_threshold,
             &mut visited,
@@ -917,7 +917,7 @@ impl ExchangeGraph {
         &self,
         current_token_id: &str,
         start_token_id: &str,
-        current_amount: BigDecimal,
+        initial_amount: &BigDecimal,
         remaining_depth: usize,
         min_profit_threshold: f64,
         visited: &mut HashSet<String>,
@@ -933,7 +933,7 @@ impl ExchangeGraph {
         if current_path.len() >= 2 && current_token_id == start_token_id {
             if let Some(arbitrage_path) = self.evaluate_arbitrage_path(
                 current_path,
-                &current_amount,
+                &initial_amount,
                 min_profit_threshold,
             ) {
                 // 先获取路径信息用于显示
@@ -971,7 +971,7 @@ impl ExchangeGraph {
         if let Some(edges) = self.adjacency_list.get(current_token_id) {
             for edge in edges {
                 // 计算通过这条边后的金额
-                let next_amount = self.calculate_amount_after_trade(&current_amount, edge);
+                // let next_amount = self.calculate_amount_after_trade(&initial_amount, edge);
                 
                 // 添加边到当前路径
                 current_path.push(edge.clone());
@@ -980,7 +980,7 @@ impl ExchangeGraph {
                 self.dfs_arbitrage_paths(
                     &edge.to_token_id,
                     start_token_id,
-                    next_amount,
+                    initial_amount,
                     remaining_depth - 1,
                     min_profit_threshold,
                     visited,
