@@ -4,6 +4,7 @@ use log::{error, info};
 
 use crate::config::Config;
 use crate::core::ArbitrageTrade;
+use crate::core::trade_calculator::TradeCalculator;
 use crate::store::database::Database;
 use crate::store::pair_manager::PairManager;
 use crate::realtime_monitor::RealTimeMonitor;
@@ -389,14 +390,47 @@ impl CliApp {
             let path_count = paths.len();
             total_paths_found += path_count;
             
-            info!("📈 从 {} 开始找到 {} 条路径", token, path_count);
+            info!("从 {} 开始找到 {} 条路径", token, path_count);
             
             // 显示前3条最佳路径的详细信息
             for (i, path) in paths.iter().take(3).enumerate() {
-                info!("  路径 {}: {} (净利润率: {:.4}%)", 
-                     i + 1, 
-                     path.format_path_chain(), 
-                     path.net_profit_rate * 100.0);
+                info!("路径 {}", i + 1);
+                info!("  💰 初始投入: {:.6}", path.initial_amount);
+                info!("  📈 最终金额: {:.6}", path.final_amount);
+                info!("  💵 绝对盈利: {:.6}", path.profit);
+                info!("  📊 盈利率: {:.4}%", path.profit_rate * 100.0);
+                info!("  💎 净盈利: {:.6}", path.net_profit);
+                info!("  🎯 净利润率: {:.4}%", path.net_profit_rate * 100.0);
+                info!("  ⛽ Gas成本: {:.6}", path.total_gas_cost);
+                info!("  💸 交易费用: {:.6}", path.total_fee_cost);
+                info!("  ⚠️  风险评分: {:.2}/100", path.risk_score);
+                info!("  ⏱️  预估执行时间: {:.2}秒", path.estimated_execution_time);
+                info!("  🏪 涉及DEX: {:?}", path.get_involved_dexes());
+                info!("  🪙 涉及代币: {:?}", path.get_involved_tokens());
+                
+                // 显示每步交易的金额变化
+                info!("  🔄 交易步骤详情:");
+                let mut current_amount = path.initial_amount.clone();
+                info!("    步骤 0: 起始金额 = {:.6} {}", current_amount, 
+                      if !path.edges.is_empty() { &path.edges[0].from_token } else { "UNKNOWN" });
+                
+                for (step, edge) in path.edges.iter().enumerate() {
+                    let output_amount = TradeCalculator::calculate_trade_output(&current_amount, edge);
+                    info!("    步骤 {}: {} → {} | 输入: {:.6} {} → 输出: {:.6} {} (汇率: {:.6}, DEX: {})", 
+                          step + 1,
+                          edge.from_token,
+                          edge.to_token,
+                          current_amount,
+                          edge.from_token,
+                          output_amount,
+                          edge.to_token,
+                          edge.exchange_rate,
+                          edge.dex
+                    );
+                    current_amount = output_amount;
+                }
+                
+                info!("  ────────────────────────────────────────");
             }
             
             if path_count > 3 {

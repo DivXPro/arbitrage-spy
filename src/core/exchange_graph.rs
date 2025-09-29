@@ -1003,51 +1003,49 @@ impl ExchangeGraph {
     fn evaluate_arbitrage_path(
         &self,
         path: &[ExchangeEdge],
-        final_amount: &BigDecimal,
+        initial_amount: &BigDecimal,
         min_profit_threshold: f64,
     ) -> Option<ArbitragePath> {
         if path.is_empty() {
             return None;
         }
 
-        let initial_amount = BigDecimal::from(1);
-        let profit = final_amount - &initial_amount;
-        let profit_rate = profit.to_f64().unwrap_or(0.0);
+        // 使用统一的 TradeCalculator 计算路径盈利指标
+        let (final_amount, profit, profit_rate) = TradeCalculator::calculate_path_profit(initial_amount, path);
 
         // 检查是否满足最小盈利阈值
         if profit_rate < min_profit_threshold {
             return None;
         }
 
-        // 计算总的Gas成本
-        let total_gas_cost: BigDecimal = path.iter()
-            .map(|edge| &edge.gas_cost)
-            .sum();
+        // 计算成本
+        let total_gas_cost = TradeCalculator::calculate_total_gas_cost(path);
+        let total_fee_cost = TradeCalculator::calculate_total_fees(initial_amount, path);
 
-        // 计算净盈利（扣除Gas）
-        let net_profit = &profit - &total_gas_cost;
-        let net_profit_rate = net_profit.to_f64().unwrap_or(0.0);
+        // 计算净盈利
+        let (net_profit, net_profit_rate) = TradeCalculator::calculate_net_profit(initial_amount, path);
 
         // 检查净盈利是否仍然满足阈值
         if net_profit_rate < min_profit_threshold {
             return None;
         }
 
-        // 计算路径风险评分
-        let risk_score = self.calculate_path_risk(path);
+        // 计算路径风险评分和执行时间
+        let risk_score = TradeCalculator::calculate_path_risk(path);
+        let estimated_execution_time = TradeCalculator::estimate_execution_time(path);
 
         Some(ArbitragePath {
             edges: path.to_vec(),
             initial_amount: initial_amount.clone(),
-            final_amount: final_amount.clone(),
-            profit: profit.clone(),
+            final_amount,
+            profit,
             profit_rate,
-            net_profit: net_profit.clone(),
+            net_profit,
             net_profit_rate,
-            total_gas_cost: total_gas_cost.clone(),
-            total_fee_cost: BigDecimal::zero(), // Fee is already deducted in calculate_amount_after_trade
+            total_gas_cost,
+            total_fee_cost,
             risk_score,
-            estimated_execution_time: self.estimate_execution_time(path),
+            estimated_execution_time,
         })
     }
 
@@ -1277,43 +1275,6 @@ impl ExchangeGraph {
         ).into_iter()
         .filter(|path| path.edges.len() == 3) // 确保是三角套利
         .collect()
-    }
-
-    /// 实时监控套利机会（模拟实时更新）
-    pub fn monitor_arbitrage_opportunities(
-        &self,
-        monitored_tokens: &[String],
-        max_depth: usize,
-        min_profit_threshold: f64,
-    ) -> ArbitrageMonitorResult {
-        let mut total_opportunities = 0;
-        let mut best_opportunity: Option<ArbitragePath> = None;
-        let mut opportunities_by_token = HashMap::new();
-
-        for token in monitored_tokens {
-            let paths = self.find_best_arbitrage_paths(token, max_depth, min_profit_threshold, 5);
-            
-            if !paths.is_empty() {
-                total_opportunities += paths.len();
-                opportunities_by_token.insert(token.clone(), paths.len());
-
-                // 更新最佳机会
-                if let Some(best_path) = paths.first() {
-                    if best_opportunity.is_none() || 
-                       best_path.net_profit_rate > best_opportunity.as_ref().unwrap().net_profit_rate {
-                        best_opportunity = Some(best_path.clone());
-                    }
-                }
-            }
-        }
-
-        ArbitrageMonitorResult {
-            timestamp: Utc::now(),
-            total_opportunities,
-            best_opportunity,
-            opportunities_by_token,
-            monitored_tokens: monitored_tokens.to_vec(),
-        }
     }
 
     /// 计算路径组合的风险分散效果

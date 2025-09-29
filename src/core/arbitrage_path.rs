@@ -53,6 +53,10 @@ impl ArbitragePath {
         self.net_profit = net_profit;
         self.net_profit_rate = net_profit_rate;
 
+        // 计算风险评分和执行时间
+        self.risk_score = TradeCalculator::calculate_path_risk(&self.edges);
+        self.estimated_execution_time = TradeCalculator::estimate_execution_time(&self.edges);
+
         Ok(())
     }
 
@@ -88,7 +92,7 @@ impl ArbitragePath {
 
         let mut chain = vec![self.edges[0].from_token.clone()];
         for edge in &self.edges {
-            chain.push(format!("{}({})", edge.to_token, edge.pair_id));
+            chain.push(format!("{}({}：{:.18})", edge.to_token, edge.pair_id, edge.exchange_rate));
         }
         chain.join(" -> ")
     }

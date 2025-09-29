@@ -240,6 +240,83 @@ impl TradeCalculator {
         
         &edge.exchange_rate * &fee_multiplier * &slippage_multiplier
     }
+
+    /// 计算路径风险评分
+    /// 
+    /// 风险评分基于以下因素：
+    /// - 流动性风险：流动性越低，风险越高
+    /// - 滑点风险：滑点越高，风险越高  
+    /// - DEX风险：不同DEX的可靠性不同
+    /// - 路径长度风险：路径越长，风险越高
+    /// 
+    /// # 参数
+    /// * `path` - 套利路径
+    /// 
+    /// # 返回
+    /// 风险评分 (0-100，100为最高风险)
+    pub fn calculate_path_risk(path: &[ExchangeEdge]) -> f64 {
+        let mut risk_score = 0.0;
+
+        for edge in path {
+            // 流动性风险：流动性越低，风险越高
+            let liquidity_usd = edge.liquidity.to_f64().unwrap_or(0.0);
+            let liquidity_risk = if liquidity_usd > 1_000_000.0 {
+                0.0
+            } else if liquidity_usd > 100_000.0 {
+                10.0
+            } else if liquidity_usd > 10_000.0 {
+                25.0
+            } else {
+                50.0
+            };
+
+            // 滑点风险
+            let slippage_risk = edge.slippage * 10.0; // 滑点越高，风险越高
+
+            // DEX风险（不同DEX的可靠性不同）
+            let dex_risk = match edge.dex.as_str() {
+                "uniswap_v2" | "uniswap_v3" => 0.0,
+                "sushiswap" | "pancakeswap" => 5.0,
+                _ => 15.0,
+            };
+
+            risk_score += liquidity_risk + slippage_risk + dex_risk;
+        }
+
+        // 路径长度风险：路径越长，风险越高
+        let path_length_risk = (path.len() as f64 - 2.0) * 5.0;
+        risk_score += path_length_risk;
+
+        risk_score.min(100.0) // 最大风险评分为100
+    }
+
+    /// 估算路径执行时间（秒）
+    /// 
+    /// 执行时间基于以下因素：
+    /// - 基础执行时间：每个交易约15秒（以太坊区块时间）
+    /// - DEX复杂度：不同DEX的执行时间差异
+    /// 
+    /// # 参数
+    /// * `path` - 套利路径
+    /// 
+    /// # 返回
+    /// 预估执行时间（秒）
+    pub fn estimate_execution_time(path: &[ExchangeEdge]) -> f64 {
+        // 基础执行时间：每个交易约15秒（以太坊区块时间）
+        let base_time = path.len() as f64 * 15.0;
+
+        // 不同DEX的执行时间差异
+        let dex_time_factor: f64 = path.iter()
+            .map(|edge| match edge.dex.as_str() {
+                "uniswap_v2" => 1.0,
+                "uniswap_v3" => 1.2, // V3稍微复杂一些
+                "sushiswap" => 1.1,
+                _ => 1.5,
+            })
+            .sum::<f64>() / path.len() as f64;
+
+        base_time * dex_time_factor
+    }
 }
 
 #[cfg(test)]
