@@ -352,7 +352,6 @@ impl ExchangeGraph {
         self.mark_pair_updated(pair.id.as_str());
 
         self.last_updated = Utc::now();
-        info!("交易对 {} 更新完成", pair.id);
         
         Ok(())
     }

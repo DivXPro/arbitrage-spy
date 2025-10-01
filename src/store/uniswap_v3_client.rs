@@ -93,9 +93,7 @@ impl UniswapV3Client {
     }
 
     /// 获取池详细信息
-    pub async fn get_pool_info(&self, pool_address: Address) -> Result<V3PoolInfo> {
-        info!("获取池 {:?} 的详细信息", pool_address);
-        
+    pub async fn get_pool_info(&self, pool_address: Address) -> Result<V3PoolInfo> {        
         // 检查池地址是否为零地址
         if pool_address == Address::zero() {
             return Err(anyhow!("无效的池地址"));
@@ -196,21 +194,6 @@ impl UniswapV3Client {
         Ok(all_pools)
     }
 
-    /// 获取池的当前价格
-    pub async fn get_pool_price(&self, pool_address: Address) -> Result<(String, i32)> {
-        info!("获取池 {:?} 的当前价格", pool_address);
-        
-        // 简化实现
-        Ok(("79228162514264337593543950336".to_string(), 0))
-    }
-
-    /// 获取池的流动性
-    pub async fn get_pool_liquidity(&self, pool_address: Address) -> Result<String> {
-        info!("获取池 {:?} 的流动性", pool_address);
-        
-        // 简化实现
-        Ok("1000000000000000000".to_string())
-    }
 
     /// 批量获取池信息
     pub async fn get_pools_batch(&self, pool_addresses: Vec<Address>) -> Result<Vec<V3PoolInfo>> {

@@ -1,6 +1,6 @@
 use anyhow::Result;
 use log::{error, info, debug, warn};
-use tokio::sync::{mpsc, broadcast};
+use tokio::sync::{broadcast};
 use ethers::{
     prelude::*,
     providers::{Provider, StreamExt},
@@ -302,30 +302,6 @@ impl EventListener {
     pub fn add_pairs(&mut self, pairs: Vec<PairData>) -> Result<()> {
         for pair in pairs {
             self.add_pair(pair)?;
-        }
-        Ok(())
-    }
-    
-    /// 添加要监听的DEX合约地址
-    pub fn add_contract(&mut self, name: String, address: &str, protocol_type: String, dex_type: String) -> Result<()> {
-        let parsed_address: H160 = address.parse()
-            .map_err(|e| anyhow::anyhow!("无效的合约地址 {}: {}", address, e))?;
-        
-        let contract_info = ContractInfo {
-            address: parsed_address,
-            protocol_type: protocol_type.clone(),
-            dex: dex_type.clone(),
-        };
-        
-        self.contracts.insert(name.clone(), contract_info);
-        info!("已添加合约监听: {} -> {} ({})", name, address, protocol_type);
-        Ok(())
-    }
-    
-    /// 批量添加合约地址（需要指定协议类型）
-    pub fn add_contracts(&mut self, contracts: HashMap<String, (String, String, String)>) -> Result<()> {
-        for (name, (address, protocol_type, dex_type)) in contracts {
-            self.add_contract(name, &address, protocol_type, dex_type)?;
         }
         Ok(())
     }

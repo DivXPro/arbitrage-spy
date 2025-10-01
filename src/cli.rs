@@ -416,16 +416,13 @@ impl CliApp {
                 
                 for (step, edge) in path.edges.iter().enumerate() {
                     let output_amount = TradeCalculator::calculate_trade_output(&current_amount, edge);
-                    info!("    步骤 {}: {} → {} | 输入: {:.6} {} → 输出: {:.6} {} (汇率: {:.6}, DEX: {})", 
+                    info!("    步骤 {}: {} {:.6}  → {} {:.6} | Add({})", 
                           step + 1,
                           edge.from_token,
-                          edge.to_token,
                           current_amount,
-                          edge.from_token,
-                          output_amount,
                           edge.to_token,
-                          edge.exchange_rate,
-                          edge.dex
+                          output_amount,
+                          edge.pair_id
                     );
                     current_amount = output_amount;
                 }
