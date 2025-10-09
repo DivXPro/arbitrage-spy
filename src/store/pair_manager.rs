@@ -226,6 +226,37 @@ impl PairManager {
     pub fn is_dex_type_supported(&self, dex_type: &str) -> bool {
         self.get_supported_dex_types().contains(&dex_type)
     }
+
+    pub fn load_pairs_by_tokens_addresses(
+        &self,
+        network: Option<&str>,
+        dex_type: Option<&str>,
+        addresses: &[String],
+        limit: Option<usize>,
+    ) -> Result<Vec<PairData>> {
+        if addresses.is_empty() {
+            return Ok(vec![]);
+        }
+        self.validate_filter_params(network, dex_type, limit)?;
+        let pairs = self.database.load_pairs_by_tokens_addresses(network, dex_type, addresses, limit)?;
+        Ok(self.postprocess_pairs(pairs))
+    }
+
+    // 新增：根据一组交易对ID加载交易对列表
+    pub fn load_pairs_by_ids(
+        &self,
+        network: Option<&str>,
+        dex_type: Option<&str>,
+        pair_ids: &[String],
+        limit: Option<usize>,
+    ) -> Result<Vec<PairData>> {
+        if pair_ids.is_empty() {
+            return Ok(vec![]);
+        }
+        self.validate_filter_params(network, dex_type, limit)?;
+        let pairs = self.database.load_pairs_by_ids(network, dex_type, pair_ids, limit)?;
+        Ok(self.postprocess_pairs(pairs))
+    }
 }
 
 #[cfg(test)]
@@ -323,3 +354,5 @@ mod tests {
         assert_eq!(processed.2, 987.65);
     }
 }
+
+        

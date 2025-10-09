@@ -117,6 +117,20 @@ impl CliApp {
                 .help("指定网络")
                 .value_name("NETWORK")
                 .requires(GRAPH_ARG),
+            
+            // 新增：按交易对ID集合构图
+            Arg::new("pair-ids")
+                .long("pair-ids")
+                .help("按交易对ID集合构建图，使用逗号分隔多个ID")
+                .value_name("PAIR_IDS")
+                .requires(GRAPH_ARG),
+            
+            // 新增：限制加载的交易对数量
+            Arg::new("limit")
+                .long("limit")
+                .help("限制加载的交易对数量")
+                .value_name("NUMBER")
+                .requires(GRAPH_ARG),
         ]
     }
 
@@ -152,8 +166,20 @@ impl CliApp {
             let protocol = matches.get_one::<String>("protocol").unwrap();
             let network = matches.get_one::<String>("network");
             
+            // 解析可选的 pair-ids 和 limit
+            let pair_ids_opt = matches
+                .get_one::<String>("pair-ids")
+                .map(|s| s
+                    .split(',')
+                    .map(|x| x.trim().to_string())
+                    .filter(|x| !x.is_empty())
+                    .collect::<Vec<String>>());
+            let limit_opt = matches
+                .get_one::<String>("limit")
+                .and_then(|s| s.parse::<usize>().ok());
+            
             info!("执行graph命令...");
-            self.build_exchange_graph(protocol, network).await?;
+            self.build_exchange_graph(protocol, network, pair_ids_opt, limit_opt).await?;
             return Ok(());
         }
 
@@ -305,11 +331,15 @@ impl CliApp {
     }
 
     /// 构建ExchangeGraph
-    async fn build_exchange_graph(&self, protocol: &str, network: Option<&String>) -> Result<()> {
+    async fn build_exchange_graph(&self, protocol: &str, network: Option<&String>, pair_ids: Option<Vec<String>>, limit: Option<usize>) -> Result<()> {
         info!("开始构建ExchangeGraph，协议: {}, 网络: {:?}", protocol, network);
 
-        let graph = match (protocol, network) {
-            ("v3", None) => {
+        let graph = match (protocol, pair_ids.as_ref()) {
+            ("v3", Some(ids)) if !ids.is_empty() => {
+                info!("按交易对ID集合构建V3协议的ExchangeGraph...");
+                ArbitrageTrade::build_v3_exchange_graph_for_pair_ids(&self.database, ids, limit).await?
+            },
+            ("v3", _) => {
                 info!("构建V3协议的ExchangeGraph...");
                 ArbitrageTrade::build_v3_exchange_graph(&self.database).await?
             },

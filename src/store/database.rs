@@ -666,5 +666,113 @@ impl Database {
         }
     }
 
+    /// 根据一组 token 地址筛选其之间的交易对（双方均在集合内） - 直接数据库操作
+    pub fn load_pairs_by_tokens_addresses(
+        &self,
+        network: Option<&str>,
+        dex_type: Option<&str>,
+        addresses: &[String],
+        limit: Option<usize>,
+    ) -> Result<Vec<PairData>> {
+        use super::pair_manager::TokenInfo;
+        if addresses.is_empty() { return Ok(vec![]); }
 
+        let mut query = String::from(
+            r#"
+            SELECT id, network, dex, protocol_type, token0_id, token0_symbol, token0_name, token0_decimals,
+                   token1_id, token1_symbol, token1_name, token1_decimals,
+                   volume_usd, reserve_usd, tx_count, reserve0, reserve1, fee_tier, sqrt_price, tick
+            FROM pairs
+            "#,
+        );
+
+        let mut conditions: Vec<String> = Vec::new();
+        let mut params_vec: Vec<String> = Vec::new();
+
+        if let Some(net) = network { conditions.push("network = ?".to_string()); params_vec.push(net.to_string()); }
+        if let Some(dex) = dex_type { conditions.push("dex = ?".to_string()); params_vec.push(dex.to_string()); }
+
+        // 构造 IN 子句占位符
+        let placeholders = std::iter::repeat("?").take(addresses.len()).collect::<Vec<_>>().join(", ");
+        conditions.push(format!("token0_id IN ({})", placeholders));
+        conditions.push(format!("token1_id IN ({})", placeholders));
+        for a in addresses { params_vec.push(a.clone()); }
+        for a in addresses { params_vec.push(a.clone()); }
+
+        query.push_str(" WHERE ");
+        query.push_str(&conditions.join(" AND "));
+        if let Some(lim) = limit { query.push_str(&format!(" LIMIT {}", lim)); }
+
+        let binding = self.conn.lock().unwrap();
+        let mut stmt = binding.prepare(&query)?;
+        let params: Vec<&dyn rusqlite::ToSql> = params_vec.iter().map(|p| p as &dyn rusqlite::ToSql).collect();
+
+        let pair_iter = stmt.query_map(params.as_slice(), |row| {
+            Ok(PairData {
+                id: row.get(0)?, network: row.get(1)?, dex: row.get(2)?, protocol_type: row.get(3)?,
+                token0: TokenInfo { id: row.get(4)?, symbol: row.get(5)?, name: row.get(6)?, decimals: row.get(7)? },
+                token1: TokenInfo { id: row.get(8)?, symbol: row.get(9)?, name: row.get(10)?, decimals: row.get(11)? },
+                volume_usd: row.get(12)?, reserve_usd: row.get(13)?, tx_count: row.get(14)?, reserve0: row.get(15)?, reserve1: row.get(16)?,
+                fee_tier: row.get(17)?, sqrt_price: row.get(18)?, tick: row.get(19)?,
+            })
+        })?;
+
+        let mut pairs = Vec::new();
+        for pair in pair_iter { pairs.push(pair?); }
+        Ok(pairs)
+    }
+
+    /// 根据一组交易对ID筛选交易对（id 在集合内） - 直接数据库操作
+    pub fn load_pairs_by_ids(
+        &self,
+        network: Option<&str>,
+        dex_type: Option<&str>,
+        pair_ids: &[String],
+        limit: Option<usize>,
+    ) -> Result<Vec<PairData>> {
+        use super::pair_manager::TokenInfo;
+        if pair_ids.is_empty() { return Ok(vec![]); }
+
+        let mut query = String::from(
+            r#"
+            SELECT id, network, dex, protocol_type, token0_id, token0_symbol, token0_name, token0_decimals,
+                   token1_id, token1_symbol, token1_name, token1_decimals,
+                   volume_usd, reserve_usd, tx_count, reserve0, reserve1, fee_tier, sqrt_price, tick
+            FROM pairs
+            "#,
+        );
+
+        let mut conditions: Vec<String> = Vec::new();
+        let mut params_vec: Vec<String> = Vec::new();
+
+        if let Some(net) = network { conditions.push("network = ?".to_string()); params_vec.push(net.to_string()); }
+        if let Some(dex) = dex_type { conditions.push("dex = ?".to_string()); params_vec.push(dex.to_string()); }
+
+        // 构造 IN 子句占位符
+        let placeholders = std::iter::repeat("?").take(pair_ids.len()).collect::<Vec<_>>().join(", ");
+        conditions.push(format!("id IN ({})", placeholders));
+        for id in pair_ids { params_vec.push(id.clone()); }
+
+        query.push_str(" WHERE ");
+        query.push_str(&conditions.join(" AND "));
+        if let Some(lim) = limit { query.push_str(&format!(" LIMIT {}", lim)); }
+
+        let binding = self.conn.lock().unwrap();
+        let mut stmt = binding.prepare(&query)?;
+        let params: Vec<&dyn rusqlite::ToSql> = params_vec.iter().map(|p| p as &dyn rusqlite::ToSql).collect();
+
+        let pair_iter = stmt.query_map(params.as_slice(), |row| {
+            Ok(PairData {
+                id: row.get(0)?, network: row.get(1)?, dex: row.get(2)?, protocol_type: row.get(3)?,
+                token0: TokenInfo { id: row.get(4)?, symbol: row.get(5)?, name: row.get(6)?, decimals: row.get(7)? },
+                token1: TokenInfo { id: row.get(8)?, symbol: row.get(9)?, name: row.get(10)?, decimals: row.get(11)? },
+                volume_usd: row.get(12)?, reserve_usd: row.get(13)?, tx_count: row.get(14)?, reserve0: row.get(15)?, reserve1: row.get(16)?,
+                fee_tier: row.get(17)?, sqrt_price: row.get(18)?, tick: row.get(19)?,
+            })
+        })?;
+
+        let mut pairs = Vec::new();
+        for pair in pair_iter { pairs.push(pair?); }
+        Ok(pairs)
+    }
 }
